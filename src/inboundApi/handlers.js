@@ -13,7 +13,7 @@
 const util = require('util');
 const Model = require('@internal/model').inboundTransfersModel;
 const BackendRequests = require('@internal/requests').BackendRequests;
-
+const FxpBackendRequests = require('@internal/requests').FxpBackendRequests;
 
 /**
  * Handles a GET /participants/{idType}/{idValue} request 
@@ -205,13 +205,13 @@ const putQuoteById = async (ctx) => {
 
     // If forwarding (usually while the SDK is working as a passthrough or Hub emulator)
     if (ctx.state.conf.forwardPutQuotesToBackend) {
-        let backendRequests = new BackendRequests({
+        let fxpBackendRequests = new FxpBackendRequests({
             logger: ctx.state.logger,
             backendEndpoint: ctx.state.conf.backendEndpoint,
             dfspId: ctx.state.conf.dfspId
         });
         
-        let response = await backendRequests.postFxpQuoteResponse(ctx.state.path.params.ID, ctx.request.body.quoteResponse ? ctx.request.body.quoteResponse : ctx.request.body , 
+        let response = await fxpBackendRequests.postFxpQuoteResponse(ctx.state.path.params.ID, ctx.request.body.quoteResponse ? ctx.request.body.quoteResponse : ctx.request.body , 
             { ...ctx.request.headers, ...ctx.request.body.metadata });
         console.log('Sent PUT /quotes to backend and got back: ', response);
 
@@ -236,14 +236,14 @@ const putTransfersById = async (ctx) => {
     // If forwarding (usually while the SDK is working as a passthrough or Hub emulator)
     // FIXME implement forwardPutTransfersToBackend loading on config
     if (ctx.state.conf.forwardPutTransfersToBackend) {
-        let backendRequests = new BackendRequests({
+        let fxpBackendRequests = new FxpBackendRequests({
             logger: ctx.state.logger,
             backendEndpoint: ctx.state.conf.backendEndpoint,
             dfspId: ctx.state.conf.dfspId
         });
         
         // FIXME validate implementation
-        let response = await backendRequests.postFxpTransferResponse(ctx.state.path.params.ID, ctx.request.body, ctx.request.headers['fspiop-source'], ctx.request.headers['fspiop-destination']);
+        let response = await fxpBackendRequests.postFxpTransferResponse(ctx.state.path.params.ID, ctx.request.body, ctx.request.headers['fspiop-source'], ctx.request.headers['fspiop-destination']);
         console.log('Sent PUT /transfers to backend and got back: ', response);
 
     } else {

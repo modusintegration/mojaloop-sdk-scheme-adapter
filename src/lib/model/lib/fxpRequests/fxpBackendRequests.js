@@ -15,7 +15,7 @@ const request = require('request-promise-native');
 
 const http = require('http');
 
-const common = require('./common.js');
+const common = require('../requests/common');
 const buildUrl = common.buildUrl;
 const throwOrJson = common.throwOrJson;
 
@@ -32,7 +32,7 @@ const defaultFXPBackendHeaders = {
  * 
  * / FIXME Move the specific FXP methods to another class, so this one can be pulled from the original sdk project
  */
-class BackendRequests {
+class FxpBackendRequests {
     constructor(config) {
         this.config = config;
         this.logger = config.logger;
@@ -49,34 +49,94 @@ class BackendRequests {
 
 
     /**
-     * Executes a GET /parties request for the specified identifier type and identifier 
+     * Executes a POST /quotes request for the specified quote request
      *
      * @returns {object} - JSON response body if one was received
      */
-    async getParties(idType, idValue) {
-        return this._get(`parties/${idType}/${idValue}`, 'parties');
-    }
+    async postQuotes(quoteRequest, headers) {
+        // FIXME I think this is not ever called
+        throw new Error('IT WAS CALLED');
+        const newHeaders = {
+            accept: headers.accept,
+            'content-type': headers['content-type'],
+            date: headers.date,
+            'fspiop-source': headers['fspiop-source'],
+            'fspiop-destination': headers['fspiop-destination'],
+            'fspiop-signature': headers['fspiop-signature'],
+            'fspiop-http-method': headers['fspiop-http-method'],
+            'fspiop-uri': headers['fspiop-uri'],
+            'fspiop-sourcecurrency': headers['fspiop-sourcecurrency'],
+            'fspiop-destinationcurrency': headers['fspiop-destinationcurrency'],
+            authorization: headers.authorization
+        };
 
+        return this._post('quotes', quoteRequest, newHeaders, true);
+    }
 
     /**
-     * Executes a POST /quoterequests request for the specified quote request
+     * 
+     * @param {quote} quoteRequest 
+     * @param {http-headers} headers 
+     */
+    async postFxpQuotes(quoteRequest, headers) {
+        const composedFXPQuote = {
+            quote: quoteRequest,
+            metadata:{
+                destinationFSP: headers['fspiop-destination'],
+                destinationCurrency: headers['fspiop-destinationcurrency'],
+                sourceFSP: headers['fspiop-source'],
+                sourceCurrency: headers['fspiop-sourcecurrency']
+            }
+        };
+
+        return this._post('fxpquotes', composedFXPQuote, defaultFXPBackendHeaders);
+    }
+
+    /**
+     * Executes a POST /fxpquotes/{id}/responses request for the specified quote request
+     * 
+     * @param {string} quoteId 
+     * @param {body} quoteRequest 
+     * @param {headers} headers 
      *
      * @returns {object} - JSON response body if one was received
      */
-    async postQuoteRequests(quoteRequest) {
-        return this._post('quoterequests', quoteRequest);
-    }
+    async postFxpQuoteResponse(quoteId, quoteRequest, headers) {
 
+        const composedQuoteResponse = {
+            quoteResponse: quoteRequest,
+            metadata:{
+                destinationFSP: headers['fspiop-destination'],
+                sourceFSP: headers['fspiop-source'],
+            }
+        };
+        
+        console.log('postQuote sending headers: ', headers, ' quoteRequest: ', composedQuoteResponse);
+        return this._post(`fxpquotes/${quoteId}/responses`, composedQuoteResponse, defaultFXPBackendHeaders);
+    }
+    
     
     /**
-     * Executes a POST /transfers request for the specified transfer prepare
-     *
-     * @returns {object} - JSON response body if one was received
+     * 
+     * @param {prepareRequest} transfer prepare request
      */
-    async postTransfers(prepare) {
-        return this._post('transfers', prepare);
+    async postFxpTransfers(prepareRequest) {
+        return this._post('fxptransfers', prepareRequest);
     }
 
+    /**
+     * 
+     * @param {fulfilment} fxpTransferResponse fxpTransferResponse
+     * @param {transferId} transferId transferId
+     * @param {String} sourceFSP
+     * @param {String} destinationFSP
+     */
+    async postFxpTransferResponse(transferId, fxpTransferResponse) {
+        return this._post(`fxptransfers/${transferId}/responses`, fxpTransferResponse);
+    }
+    
+    // FIXME The following functions are copied from backendRequests. They should be moved to the shared package, and the properties that are accessed via this ( like this.logger )
+    // sent as parameters
 
     /**
      * Utility function for building outgoing request headers as required by the mojaloop api spec
@@ -162,8 +222,7 @@ class BackendRequests {
     }
 }
 
-
 module.exports = {
-    BackendRequests: BackendRequests,
+    FxpBackendRequests: FxpBackendRequests,
     HTTPResponseError: common.HTTPResponseError
 };
