@@ -28,9 +28,8 @@ const defaultFXPBackendHeaders = {
 };
 
 /**
- * A class for making requests to DFSP backend API
+ * A class for making requests to the FXP backend
  * 
- * / FIXME Move the specific FXP methods to another class, so this one can be pulled from the original sdk project
  */
 class FxpBackendRequests {
     constructor(config) {
@@ -45,32 +44,6 @@ class FxpBackendRequests {
 
         // Switch or peer DFSP endpoint
         this.backendEndpoint = `${this.transportScheme}://${config.backendEndpoint}`;
-    }
-
-
-    /**
-     * Executes a POST /quotes request for the specified quote request
-     *
-     * @returns {object} - JSON response body if one was received
-     */
-    async postQuotes(quoteRequest, headers) {
-        // FIXME I think this is not ever called
-        throw new Error('IT WAS CALLED');
-        const newHeaders = {
-            accept: headers.accept,
-            'content-type': headers['content-type'],
-            date: headers.date,
-            'fspiop-source': headers['fspiop-source'],
-            'fspiop-destination': headers['fspiop-destination'],
-            'fspiop-signature': headers['fspiop-signature'],
-            'fspiop-http-method': headers['fspiop-http-method'],
-            'fspiop-uri': headers['fspiop-uri'],
-            'fspiop-sourcecurrency': headers['fspiop-sourcecurrency'],
-            'fspiop-destinationcurrency': headers['fspiop-destinationcurrency'],
-            authorization: headers.authorization
-        };
-
-        return this._post('quotes', quoteRequest, newHeaders, true);
     }
 
     /**
