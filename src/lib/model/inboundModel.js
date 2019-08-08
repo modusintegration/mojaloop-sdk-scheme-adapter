@@ -13,6 +13,7 @@
 
 const util = require('util');
 const BackendRequests = require('@internal/requests').BackendRequests;
+const FxpBackendRequests = require('@internal/fxpRequests').FxpBackendRequests;
 const HTTPResponseError = require('@internal/requests').HTTPResponseError;
 const MojaloopRequests = require('@modusintegration/mojaloop-sdk-standard-components').MojaloopRequests;
 const Ilp = require('@modusintegration/mojaloop-sdk-standard-components').Ilp;
@@ -49,6 +50,12 @@ class InboundTransfersModel {
         });
 
         this.backendRequests = new BackendRequests({
+            logger: this.logger,
+            backendEndpoint: config.backendEndpoint,
+            dfspId: config.dfspId
+        });
+
+        this.fxpBackendRequests = new FxpBackendRequests({
             logger: this.logger,
             backendEndpoint: config.backendEndpoint,
             dfspId: config.dfspId
@@ -191,7 +198,7 @@ class InboundTransfersModel {
             this.logger.log('[Quotes 19] FXP QUOTE Sending request to backend');
             let secondStageComposedQuote;
             try {
-                secondStageComposedQuote = await this.backendRequests.postFxpQuotes(originalQuoteRequest, originalQuoteRequestHeaders);
+                secondStageComposedQuote = await this.fxpBackendRequests.postFxpQuotes(originalQuoteRequest, originalQuoteRequestHeaders);
                 if(!secondStageComposedQuote) {
                     throw new Error('null response to quote request from FXP backend');
                 }
@@ -304,7 +311,7 @@ class InboundTransfersModel {
         // forward secondStageQuoteResponse to backend; don't change any headers
         let composedResponseToOriginalQuote;
         try {
-            composedResponseToOriginalQuote = await this.backendRequests.postFxpQuoteResponse(secondStageQuoteId, secondStageQuoteResponse, secondStageQuoteResponseHeaders);
+            composedResponseToOriginalQuote = await this.fxpBackendRequests.postFxpQuoteResponse(secondStageQuoteId, secondStageQuoteResponse, secondStageQuoteResponseHeaders);
             if (!composedResponseToOriginalQuote) {
                 throw new Error('Null response from fxp to secondStageQuoteResponse');
             }
@@ -441,7 +448,7 @@ class InboundTransfersModel {
         this.logger.log(`[Transfers 03 A] FXP : received transfer ${util.inspect(prepareRequest)} from ${util.inspect(prepareRequestSourceFspId)} to ${util.inspect(destinationFspId)}`);
         this.logger.log('[Transfers 04 A] FXP : Forwarding to FXP');
         let composedSecondStageTransfer = await this.getFxpTransferFromBackend(prepareRequest, prepareRequestSourceFspId);
-        let secondStageTransfer = composedSecondStageTransfer.transfer;
+        let secondStageTransfer = composedSecondStageTransfer.transfer; // FIXME if null there was an error. OR, rethrow ex from getFxpTransferFromBackend ( better )
 
         // FIXME check timeout is less that the one in prepareRequest
         
@@ -470,7 +477,7 @@ class InboundTransfersModel {
 
         let composedTransferRequestResponse;
         try {
-            composedTransferRequestResponse = await this.backendRequests.postFxpTransfers(prepareRequest);
+            composedTransferRequestResponse = await this.fxpBackendRequests.postFxpTransfers(prepareRequest);
             if(!composedTransferRequestResponse) {
                 throw new Error('null response to transfer request from FXP backend');
             }
@@ -479,7 +486,8 @@ class InboundTransfersModel {
             this.logger.log(`Error while expecting response from FXP backend. Making error callback to ${prepareRequestSourceFspId}`);
             const err = new Errors.MojaloopFSPIOPError(error, error.message, prepareRequestSourceFspId, Errors.MojaloopApiErrorCodes.PAYEE_ERROR);
             // FIXME wrap in a trycatch and log
-            return await this.mojaloopRequests.putTransfersError(prepareRequest.transferId, err.toApiErrorObject(), prepareRequestSourceFspId);
+            await this.mojaloopRequests.putTransfersError(prepareRequest.transferId, err.toApiErrorObject(), prepareRequestSourceFspId);
+            throw error;
         }
 
         return composedTransferRequestResponse;
@@ -612,7 +620,7 @@ class InboundTransfersModel {
      */
     async forwardFulfilmentToBackend(secondStageTransfer, prepareRequestSourceFspId, transferId) {
         try {
-            let fulfilmentResponse = await this.backendRequests.postFxpTransferResponse(transferId, secondStageTransfer);
+            let fulfilmentResponse = await this.fxpBackendRequests.postFxpTransferResponse(transferId, secondStageTransfer);
             if(fulfilmentResponse != null) {
                 throw new Error('non null response to transfer request from FXP backend');
             }
