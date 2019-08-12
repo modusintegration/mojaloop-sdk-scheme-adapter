@@ -37,7 +37,7 @@ let config = {
     outboundPort: 4001,
     peerEndpoint: 'peerEndpoint:3001',
     backendEndpoint: 'backendEndpoint:3001',
-    forwardPutTransfersToBackend: true,
+    fxpModeEnabled: false,
     dfspId: 'mojaloop-sdk',
     ilpSecret: 'mojaloop-sdk',
     checkIlp: true,
@@ -78,7 +78,8 @@ const setConfig = async cfg => {
 
     config.peerEndpoint = cfg.PEER_ENDPOINT;
     config.backendEndpoint = cfg.BACKEND_ENDPOINT;
-
+    config.fxpModeEnabled = cfg.FXP_MODE_ENABLED;
+    
     config.dfspId = cfg.DFSP_ID;
     config.ilpSecret = cfg.ILP_SECRET;
     config.checkIlp = cfg.CHECK_ILP.toLowerCase() === 'false' ? false : true;
