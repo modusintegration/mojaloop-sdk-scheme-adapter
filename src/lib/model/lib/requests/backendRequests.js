@@ -105,11 +105,11 @@ class BackendRequests {
     }
 
 
-    async _put(url, body, headers) {
+    async _put(url, body) {
         const reqOpts = {
             method: 'PUT',
             uri: buildUrl(this.backendEndpoint, url),
-            headers: headers ? headers : this._buildHeaders(),
+            headers: this._buildHeaders(),
             body: JSON.stringify(body),
             resolveWithFullResponse: true,
             simple: false,
@@ -126,11 +126,11 @@ class BackendRequests {
     }
 
 
-    async _post(url, body, headers) {
+    async _post(url, body) {
         const reqOpts = {
             method: 'POST',
             uri: buildUrl(this.backendEndpoint, url),
-            headers: headers ? headers : this._buildHeaders(),
+            headers: this._buildHeaders(),
             body: JSON.stringify(body),
             resolveWithFullResponse: true,
             simple: false,
