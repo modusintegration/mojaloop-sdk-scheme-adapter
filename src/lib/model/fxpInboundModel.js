@@ -245,9 +245,8 @@ class FxpInboundModel {
 
         let peerEndpoint = this.getEndpointForDFSP(destinationFspId);
         
-        // Mojaloop requests picks the quoteId from the body
-        // FIXME this is not needed
-        responseToOriginalQuote.quoteId = composedResponseToOriginalQuote.metadata.quoteId;
+        // Mojaloop requests picks the quoteId from metadata
+        let originalQuoteId = composedResponseToOriginalQuote.metadata.quoteId;
 
         const fxpMojaloopRequests = new MojaloopRequests({
             logger: this.logger,
@@ -258,7 +257,7 @@ class FxpInboundModel {
             jwsSigningKey: this.config.jwsSigningKey // FIXME we need to use ONE PRIVATE KEY PER FX DFSP
         });
         // FIXME wrap in a trycatch
-        const putResponse = await fxpMojaloopRequests.putQuotes(responseToOriginalQuote, destinationFspId);
+        const putResponse = await fxpMojaloopRequests.putQuotes(originalQuoteId, responseToOriginalQuote, destinationFspId);
         this.logger.log(`Response from original dfspid to PUT /quotes/{originalQuoteId}: ${util.inspect(putResponse)}`);
     }
 
