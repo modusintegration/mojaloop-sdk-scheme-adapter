@@ -19,18 +19,8 @@ const common = require('./common.js');
 const buildUrl = common.buildUrl;
 const throwOrJson = common.throwOrJson;
 
-const defaultFXPBackendHeaders = {
-    accept: 'application/json',
-    // Mojaloop uses specific types like
-    // application/vnd.interoperability.quotes+json;version=1.0 and application/vnd.interoperability.transfers+json;version=1.0
-    // but the backend expects application/json
-    'content-type': 'application/json',
-};
-
 /**
  * A class for making requests to DFSP backend API
- * 
- * / FIXME Move the specific FXP methods to another class, so this one can be pulled from the original sdk project
  */
 class BackendRequests {
     constructor(config) {
