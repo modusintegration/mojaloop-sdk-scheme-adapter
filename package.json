@@ -25,7 +25,7 @@
     "@internal/randomphrase": "file:src/lib/randomphrase",
     "@internal/router": "file:src/lib/router",
     "@internal/validate": "file:src/lib/validate",
-    "@modusintegration/mojaloop-sdk-standard-components": "github:modusintegration/mojaloop-sdk-standard-components",
+    "@modusbox/mojaloop-sdk-standard-components": "github:modusintegration/mojaloop-sdk-standard-components",
     "co-body": "^6.0.0",
     "dotenv": "^6.2.0",
     "koa": "^2.6.2",

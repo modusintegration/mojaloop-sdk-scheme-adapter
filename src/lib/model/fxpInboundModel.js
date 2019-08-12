@@ -14,9 +14,9 @@
 const util = require('util');
 const FxpBackendRequests = require('@internal/fxpRequests').FxpBackendRequests;
 const HTTPResponseError = require('@internal/requests').HTTPResponseError;
-const MojaloopRequests = require('@modusintegration/mojaloop-sdk-standard-components').MojaloopRequests;
-const Ilp = require('@modusintegration/mojaloop-sdk-standard-components').Ilp;
-const Errors = require('@modusintegration/mojaloop-sdk-standard-components').Errors;
+const MojaloopRequests = require('@modusbox/mojaloop-sdk-standard-components').MojaloopRequests;
+const Ilp = require('@modusbox/mojaloop-sdk-standard-components').Ilp;
+const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
 
 const FSPIOP_SourceHeader = 'FSPIOP-Source'.toLowerCase();
 const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();

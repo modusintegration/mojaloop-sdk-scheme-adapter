@@ -37,8 +37,8 @@ const outboundApi = new Koa();
 const inboundApiSpec = yaml.load('./src/inboundApi/api.yaml');
 const outboundApiSpec = yaml.load('./src/outboundApi/api.yaml');
 
-const Jws = require('@modusintegration/mojaloop-sdk-standard-components').Jws;
-const Errors = require('@modusintegration/mojaloop-sdk-standard-components').Errors;
+const Jws = require('@modusbox/mojaloop-sdk-standard-components').Jws;
+const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
 
 const FSPIOP_SourceCurrencyHeader = 'FSPIOP-SourceCurrency'.toLowerCase();
 const FSPIOP_DestinationCurrencyHeader = 'FSPIOP-DestinationCurrency'.toLowerCase();
