@@ -37,6 +37,7 @@ let config = {
     outboundPort: 4001,
     peerEndpoint: 'peerEndpoint:3001',
     backendEndpoint: 'backendEndpoint:3001',
+    forwardPutTransfersToBackend: true,
     dfspId: 'mojaloop-sdk',
     ilpSecret: 'mojaloop-sdk',
     checkIlp: true,
