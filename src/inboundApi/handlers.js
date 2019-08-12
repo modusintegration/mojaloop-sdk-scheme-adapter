@@ -12,7 +12,6 @@
 
 const util = require('util');
 const Model = require('@internal/model').inboundTransfersModel;
-const BackendRequests = require('@internal/requests').BackendRequests;
 const FxpBackendRequests = require('@internal/requests').FxpBackendRequests;
 
 /**
@@ -112,9 +111,7 @@ const postQuotes = async (ctx) => {
 
             // use the model to handle the request
             if (ctx.fxpQuote) {
-                console.log('\x1b[46m\x1b[31m%s\x1b[0m', 'FXP QUOTE handler');
                 const response = await model.fxQuoteRequest(ctx.request.headers, ctx.request.body);
-                console.log('\x1b[46m\x1b[31m%s\x1b[0m', `FXP QUOTE handler response: ${response === null ? 'no content' : JSON.stringify(response, null, 2)}`);
                 ctx.state.logger.log(`Inbound transfers model handled FX POST /quotes request and returned: ${util.inspect(response)}`);
 
             } else {
@@ -201,8 +198,6 @@ const putPartiesByTypeAndId = async (ctx) => {
  * Handles a PUT /quotes/{ID}. This is a response to a POST /quotes request
  */
 const putQuoteById = async (ctx) => {
-    console.log('\x1b[47m\x1b[30m%s\x1b[0m', ` PUT /quotes/{ID} received with headers: ${JSON.stringify(ctx.request.headers, null, 2)} and body: ${JSON.stringify(ctx.request.body, null, 2)}`);
-
     // If forwarding (usually while the SDK is working as a passthrough or Hub emulator)
     if (ctx.state.conf.forwardPutQuotesToBackend) {
         let fxpBackendRequests = new FxpBackendRequests({

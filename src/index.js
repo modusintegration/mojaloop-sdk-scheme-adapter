@@ -147,7 +147,7 @@ const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
         if(conf.validateInboundJws) {
             try {
                 if(ctx.request.method !== 'GET') {
-                    // If the request has the currency headers, then it's a FX Quote and we need recreate and validate the original quote
+                    // If the request is a FX Quote, we need to recreate and validate the original quote
                     if ( ctx.fxpQuote ) {
                         console.log('\x1b[47m\x1b[30m%s\x1b[0m', 'FXP QUOTE received');
                         const payerFspId = ctx && ctx.request && ctx.request.body.payer && ctx.request.body.payer.partyIdInfo && ctx.request.body.payer.partyIdInfo.fspId ? ctx.request.body.payer.partyIdInfo.fspId : null;

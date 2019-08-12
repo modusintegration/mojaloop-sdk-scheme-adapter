@@ -74,7 +74,7 @@ let config = {
 const setConfig = async cfg => {
     config.inboundPort = cfg.INBOUND_LISTEN_PORT;
     config.outboundPort = cfg.OUTBOUND_LISTEN_PORT;
-    config.tls.mutualTLS.enabled = cfg.MUTUAL_TLS_ENABLED.toLowerCase() === 'false' ? false : true;
+    config.tls.mutualTLS.enabled = cfg.MUTUAL_TLS_ENABLED.toLowerCase() === 'false' ? false : true; // FIXME TypeError: Cannot read property 'toLowerCase' of undefined if cfg.MUTUAL_TLS_ENABLED is undefined
 
     config.peerEndpoint = cfg.PEER_ENDPOINT;
     config.backendEndpoint = cfg.BACKEND_ENDPOINT;
