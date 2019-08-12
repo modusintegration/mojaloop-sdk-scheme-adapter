@@ -49,7 +49,9 @@ const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
     // Set up the config from the environment
     await setConfig(process.env);
     const conf = getConfig();
-    console.log('Current config:', conf);
+
+    console.log(`Config loaded: ${util.inspect(conf, { depth: 10 })}`);
+
     // Set up a logger for each running server
     const space = Number(process.env.LOG_INDENT);
 
@@ -123,7 +125,7 @@ const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
             }
             catch(err) {
                 // error parsing body
-                inboundLogger.log(`Error parsing body: ${err.stack || util.inspect(err)}`);
+                inboundLogger.push({ err }).log('Error parsing body');
                 ctx.response.status = 400;
                 ctx.response.body = new Errors.MojaloopFSPIOPError(err, err.message, null,
                     Errors.MojaloopApiErrorCodes.MALFORMED_SYNTAX).toApiErrorObject();
@@ -202,7 +204,7 @@ const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
                 }
             }
             catch(err) {
-                inboundLogger.log(`Inbound request failed JWS validation: ${err.stack || util.inspect(err)}`);
+                inboundLogger.push({ err }).log('Inbound request failed JWS validation');
 
                 ctx.response.status = 400;
                 ctx.response.body = new Errors.MojaloopFSPIOPError(err, err.message, null,
@@ -309,14 +311,14 @@ const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
     inboundApi.use(router(inboundHandlers.map));
     inboundApi.use(async (ctx, next) => {
         // Override Koa's default behaviour of returning the status code as text in the body. If we
-        // haven't defined the body, we want it empty.
+        // haven't defined the body, we want it empty. Note that if setting this to null, Koa appears
+        // to override the status code with a 204. This is correct behaviour in the sense that the
+        // status code correctly corresponds to the content (none) but unfortunately the Mojaloop API
+        // does not respect this convention and requires a 200.
         if (ctx.response.body === undefined) {
-            ctx.response.body = null;
-            if (!ctx.response.status) {
-                ctx.response.status = 204;                
-            }
+            ctx.response.body = '';
         }
-        next(); // not sure        
+        return await next();
     });
     outboundApi.use(router(outboundHandlers.map));
 

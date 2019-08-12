@@ -29,6 +29,11 @@ async function readFile(...args) {
     return p;
 }
 
+async function readFilesDelimitedList(delimiter, list) {
+    return Promise.all(list.split(delimiter).map(filename => readFile(filename)));
+}
+
+
 
 // TODO: implement toString, toJSON toAnythingElse methods on config so that secrets can't be
 // printed
@@ -63,7 +68,8 @@ let config = {
     cacheConfig: {
         host: 'localhost',
         port: 6379
-    }
+    },
+    enableTestFeatures: false
 };
 
 /**
@@ -91,14 +97,14 @@ const setConfig = async cfg => {
     if (config.tls.mutualTLS.enabled) {
         // read inbound certs/keys
         [config.tls.inboundCreds.ca, config.tls.inboundCreds.cert, config.tls.inboundCreds.key] = await Promise.all([
-            readFile(cfg.IN_CA_CERT_PATH),
+            readFilesDelimitedList(',', cfg.IN_CA_CERT_PATH),
             readFile(cfg.IN_SERVER_CERT_PATH),
             readFile(cfg.IN_SERVER_KEY_PATH)
         ]);
 
         //read outbound certs/keys
         [config.tls.outboundCreds.ca, config.tls.outboundCreds.cert, config.tls.outboundCreds.key] = await Promise.all([
-            readFile(cfg.OUT_CA_CERT_PATH),
+            readFilesDelimitedList(',', cfg.OUT_CA_CERT_PATH),
             readFile(cfg.OUT_CLIENT_CERT_PATH),
             readFile(cfg.OUT_CLIENT_KEY_PATH)
         ]);
@@ -131,6 +137,7 @@ const setConfig = async cfg => {
     }
 
     config.forwardPutQuotesToBackend = cfg.FORWARD_PUT_QUOTES_TO_BACKEND;
+    config.enableTestFeatures = cfg.ENABLE_TEST_FEATURES.toLowerCase() === 'true' ? true : false;
 };
 
 
