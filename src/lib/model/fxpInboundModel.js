@@ -59,6 +59,24 @@ class FxpInboundModel {
         });
     }
 
+    /**
+     * Creates and returns a MojaloopRequests client that can be used to send requests from sourceDfspId to destinationDfspId.
+     * The new MojaloopRequests has the same logger, tls and jwsSign config than this.
+     * Once MBXFXP-12 is done, this will sign the requests with a different private key for each DFSP
+     * @param {String} sourceDfspId Originator DFSP id
+     * @param {String} destinationDfspId Destination DFSP id
+     */
+    createMojaloopRequestsClient (sourceDfspId, destinationDfspId) {
+        let peerEndpoint = this.getEndpointForDFSP(destinationDfspId);
+        return new MojaloopRequests({
+            logger: this.logger,
+            peerEndpoint: peerEndpoint,
+            dfspId: sourceDfspId,
+            tls: this.config.tls,
+            jwsSign: this.config.jwsSign,
+            jwsSigningKey: this.config.jwsSigningKey // FIXME MBXFXP-12 we need to use ONE PRIVATE KEY PER FX DFSP
+        });
+    }
 
     /**
      * Handles a FXP Quote, triggering the creation of the "second stage" quote and setting listeners for its resolution.
@@ -113,15 +131,7 @@ class FxpInboundModel {
     }
 
     sendSecondStageQuoteToDestination(secondStageQuoteDestinationFsp, secondStageQuoteSourceFsp, secondStageComposedQuote) {
-        let peerEndpoint = this.getEndpointForDFSP(secondStageQuoteDestinationFsp);
-        const fxpMojaloopRequests = new MojaloopRequests({
-            logger: this.logger,
-            peerEndpoint: peerEndpoint,
-            dfspId: secondStageQuoteSourceFsp,
-            tls: this.config.tls,
-            jwsSign: this.config.jwsSign,
-            jwsSigningKey: this.config.jwsSigningKey // FIXME MBXFXP-12 we need to use ONE PRIVATE KEY PER FX DFSP
-        });
+        const fxpMojaloopRequests = this.createMojaloopRequestsClient(secondStageQuoteSourceFsp, secondStageQuoteDestinationFsp);
         return fxpMojaloopRequests.postQuotes(secondStageComposedQuote.quote, secondStageQuoteDestinationFsp);
     }
 
@@ -243,19 +253,11 @@ class FxpInboundModel {
         this.logger.log(`[Quotes 31, 32] FXP QUOTE : SENDING RESPONSE TO ORIGINAL QUOTE TO DFSP1 ${util.inspect(composedResponseToOriginalQuote)}`);
         // make a callback to the source fsp with the quote response
 
-        let peerEndpoint = this.getEndpointForDFSP(destinationFspId);
-        
+        const fxpMojaloopRequests = this.createMojaloopRequestsClient(sourceFspId, destinationFspId);
+
         // Mojaloop requests picks the quoteId from metadata
         let originalQuoteId = composedResponseToOriginalQuote.metadata.quoteId;
 
-        const fxpMojaloopRequests = new MojaloopRequests({
-            logger: this.logger,
-            peerEndpoint: peerEndpoint,
-            dfspId: sourceFspId,
-            tls: this.config.tls,
-            jwsSign: this.config.jwsSign,
-            jwsSigningKey: this.config.jwsSigningKey // FIXME we need to use ONE PRIVATE KEY PER FX DFSP
-        });
         // FIXME wrap in a trycatch
         const putResponse = await fxpMojaloopRequests.putQuotes(originalQuoteId, responseToOriginalQuote, destinationFspId);
         this.logger.log(`Response from original dfspid to PUT /quotes/{originalQuoteId}: ${util.inspect(putResponse)}`);
@@ -284,14 +286,13 @@ class FxpInboundModel {
                 return this.fxpTransfer(prepareRequest, sourceFspId, destinationFspId, quote);
             }
 
-            throw new Error(`Can't process transfer with id ${prepareRequest.transferId} for a non-fxp quote does not match quote`);
+            throw new Error(`Can't process transfer with id ${prepareRequest.transferId} for a non-fxp quote`);
         }
         catch(err) {
             this.logger.log(`Error in prepareTransfer: ${err.stack || util.inspect(err)}`);
             const mojaloopError = await this._handleError(err);
             this.logger.log(`Sending error response to ${sourceFspId}: ${util.inspect(mojaloopError)}`);
-            return await this.mojaloopRequests.putTransfersError(prepareRequest.transferId,
-                mojaloopError, sourceFspId);
+            return await this.mojaloopRequests.putTransfersError(prepareRequest.transferId, mojaloopError, sourceFspId);
         }
     }
 
@@ -312,7 +313,6 @@ class FxpInboundModel {
         // FIXME check timeout is less that the one in prepareRequest
         
         // Set the secondStageTransfer properties
-        // FIXME this could also be done by the FXP, since it has the same data. Which place is better?
         secondStageTransfer.ilpPacket = quoteData.secondStageQuoteResponse.ilpPacket;
         secondStageTransfer.condition = quoteData.secondStageQuoteResponse.condition;
         // FIXME assert that the value we received from the backend is the same as:
@@ -362,16 +362,7 @@ class FxpInboundModel {
         const sourceFspId = composedTransferRequest.metadata.sourceFSP;
         const destinationFspId = composedTransferRequest.metadata.destinationFSP;
 
-        let peerEndpoint = this.getEndpointForDFSP(destinationFspId);
-
-        const fxpMojaloopRequests = new MojaloopRequests({
-            logger: this.logger,
-            peerEndpoint: peerEndpoint,
-            dfspId: sourceFspId,
-            tls: this.config.tls,
-            jwsSign: this.config.jwsSign,
-            jwsSigningKey: this.config.jwsSigningKey // FIXME we need to use ONE PRIVATE KEY PER FX DFSP
-        });
+        const fxpMojaloopRequests = this.createMojaloopRequestsClient(sourceFspId, destinationFspId);
 
         return fxpMojaloopRequests.postTransfers(composedTransferRequest.transfer, destinationFspId);
     }
@@ -416,22 +407,22 @@ class FxpInboundModel {
                 this.logger.log('fxpTransfer notification subscriber unsubscribed');
             });
 
-            const secondStageTransfer = message.data;
-            const secondStageTransferHeaders = message.headers;
+            const secondStageTransferResponse = message.data;
+            const secondStageTransferResponseHeaders = message.headers;
             
-            const sourceFspId = secondStageTransferHeaders[FSPIOP_SourceHeader];
-            const destinationFspId = secondStageTransferHeaders[FSPIOP_DestinationHeader];
+            const sourceFspId = secondStageTransferResponseHeaders[FSPIOP_SourceHeader];
+            const destinationFspId = secondStageTransferResponseHeaders[FSPIOP_DestinationHeader];
 
             if (sourceFspId === quoteData.secondStageQuoteDestinationFsp && destinationFspId === quoteData.secondStageQuoteSourceFsp) {
                 // 14B
-                this.logger.log(`[Transfers 14B] FXP : received second stage transfer callback: ${util.inspect(secondStageTransfer)}`);
+                this.logger.log(`[Transfers 14B] FXP : received second stage transfer callback: ${util.inspect(secondStageTransferResponse)}`);
             } else {
                 console.error(`Coudln't find a match for sourceFspId: ${sourceFspId} destinationFspId: ${destinationFspId}`);
             }
 
             // We got a response to the secondStageTransferRequest
-            // secondStageTransferHeaders.'fspiop-source' = DFSP2
-            // secondStageTransferHeaders.'fspiop-destination'= 'DFSP-XOF'
+            // secondStageTransferResponseHeaders.'fspiop-source' = DFSP2
+            // secondStageTransferResponseHeaders.'fspiop-destination'= 'DFSP-XOF'
             // body:
             // '{
             //     "completedTimestamp":"2019-07-19T20:06:12.287Z",
@@ -442,7 +433,7 @@ class FxpInboundModel {
             this.logger.log('[Transfers 15 B] FXP : forward onto FXP');
 
             // ( FXP on receiving will perform 16[B] Commit payee transfer)
-            await this.forwardFulfilmentToBackend(secondStageTransfer, prepareRequestSourceFspId, secondStageTransferId);
+            await this.forwardFulfilmentToBackend(secondStageTransferResponse, prepareRequestSourceFspId, secondStageTransferId);
 
             // FIXME check operation succeeded, forward error it it didn't
 
@@ -469,21 +460,21 @@ class FxpInboundModel {
     }
 
     /**
-     * Sends the secondStageTransfer to the backend
+     * Sends a transfer response to the backend.
      * 
-     * @param {TransactionsIDPutResponse} secondStageTransfer Response to a transfer. See Mojaloop API 6.7.3.1
+     * @param {TransactionsIDPutResponse} transferResponse Response to a transfer. See Mojaloop API 6.7.3.1
      * @param {String} prepareRequestSourceFspId Only used to forward errors to. FIXME Will be refactored when the error handling is redone
-     * @param {UUID} transferId secondStageTransfer transferId
+     * @param {UUID} transferId transferResponse transferId
      * 
      * @returns null if no error
      */
-    async forwardFulfilmentToBackend(secondStageTransfer, prepareRequestSourceFspId, transferId) {
+    async forwardFulfilmentToBackend(transferResponse, prepareRequestSourceFspId, transferId) {
         try {
-            let fulfilmentResponse = await this.fxpBackendRequests.postFxpTransferResponse(transferId, secondStageTransfer);
+            let fulfilmentResponse = await this.fxpBackendRequests.postFxpTransferResponse(transferId, transferResponse);
             if(fulfilmentResponse != null) {
                 throw new Error('non null response to transfer request from FXP backend');
             }
-            this.logger.log('FXP transfer got OK response from backend');
+            this.logger.log('FXP forwardFulfilmentToBackend got OK response from backend');
             return fulfilmentResponse;
         } catch (error) {
             // make an error callback to the source fsp
@@ -554,7 +545,7 @@ class FxpInboundModel {
             //  }',
             this.logger.log('[Transfers 23] FXP : Log fulfilment has been commited and forward to FXP');
 
-            await this.forwardFulfilmentToBackend(originalTransferResponse, prepareRequestSourceFspId, prepareRequest.transferId, originalTransferResponseHeaders);
+            await this.forwardFulfilmentToBackend(originalTransferResponse, prepareRequestSourceFspId, prepareRequest.transferId);
 
             // we're done. Check the response, and forward errors if any
             
@@ -571,16 +562,7 @@ class FxpInboundModel {
      * @param {Object} transferFulfilment 
      */
     async sendFulfimentToOriginatorFsp(transferId, transferFulfilment, sourceFspId, destinationFspId) {
-        let peerEndpoint = this.getEndpointForDFSP(destinationFspId);
-
-        const fxpMojaloopRequests = new MojaloopRequests({
-            logger: this.logger,
-            peerEndpoint: peerEndpoint,
-            dfspId: sourceFspId,
-            tls: this.config.tls,
-            jwsSign: this.config.jwsSign,
-            jwsSigningKey: this.config.jwsSigningKey // FIXME we need to use ONE PRIVATE KEY PER FX DFSP
-        });
+        const fxpMojaloopRequests = this.createMojaloopRequestsClient(sourceFspId, destinationFspId);
 
         return fxpMojaloopRequests.putTransfers(transferId, transferFulfilment, destinationFspId);
     }

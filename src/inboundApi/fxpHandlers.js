@@ -183,7 +183,6 @@ const putQuoteById = async (ctx) => {
  */
 const putTransfersById = async (ctx) => {
     // If forwarding (usually while the SDK is working as a passthrough or Hub emulator)
-    // FIXME implement forwardPutTransfersToBackend loading on config
     if (ctx.state.conf.forwardPutTransfersToBackend) {
         let fxpBackendRequests = fxpBackendRequestsFactory({
             logger: ctx.state.logger,
