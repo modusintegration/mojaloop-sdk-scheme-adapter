@@ -1,11 +1,11 @@
 const assert = require('chai').assert;
 const sinon = require('sinon');
 const FxpInboundModel = require('@internal/model').fxpInboundModel;
-const FxpBackendRequests = require('@internal/fxpRequests').FxpBackendRequests;
 require('dotenv').config();
 const { setConfig, getConfig } = require('../src/config.js');
+const { describe, it } = require('mocha');
 
-describe('FXP Handlers', () => {
+describe('FxpInboundModel', () => {
     it('should forward a FXP quote to the FXP Server', async () => {
     // prepare the test
 
@@ -25,7 +25,7 @@ describe('FXP Handlers', () => {
         };
 
         ctx.request = {
-            id: 1, // randomPhrase();
+            id: 'abcde1234', // randomPhrase();
             fxpQuote: true,
             'headers': {
                 'accept': 'application/vnd.interoperability.quotes+json;version=1',

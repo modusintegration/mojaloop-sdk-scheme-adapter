@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test-mocha": "mocha",
+    "test-with-coverage": "nyc --reporter=text mocha",
     "test": "ava"
   },
   "author": "Matt Kingston, James Bush, ModusBox Inc.",
@@ -41,6 +42,7 @@
     "eslint-config-airbnb-base": "^13.1.0",
     "eslint-plugin-import": "^2.17.1",
     "mocha": "^6.2.0",
+    "nyc": "^14.1.1",
     "sinon": "^7.4.1"
   }
 }
