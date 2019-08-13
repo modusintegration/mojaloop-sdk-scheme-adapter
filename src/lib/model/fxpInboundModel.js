@@ -472,7 +472,7 @@ class FxpInboundModel {
         try {
             let fulfilmentResponse = await this.fxpBackendRequests.postFxpTransferResponse(transferId, transferResponse);
             if(fulfilmentResponse != null) {
-                throw new Error('non null response to transfer request from FXP backend');
+                throw new Error(`Unexpected non empty response to transfer request from FXP backend: ${util.inspect(fulfilmentResponse)}`);
             }
             this.logger.log('FXP forwardFulfilmentToBackend got OK response from backend');
             return fulfilmentResponse;
