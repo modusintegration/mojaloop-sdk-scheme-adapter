@@ -43,6 +43,8 @@ let config = {
     peerEndpoint: 'peerEndpoint:3001',
     backendEndpoint: 'backendEndpoint:3001',
     fxpModeEnabled: false,
+    forwardPutQuotesToBackend: false,
+    forwardPutTransfersToBackend: false,
     dfspId: 'mojaloop-sdk',
     ilpSecret: 'mojaloop-sdk',
     checkIlp: true,
@@ -137,6 +139,7 @@ const setConfig = async cfg => {
     }
 
     config.forwardPutQuotesToBackend = cfg.FORWARD_PUT_QUOTES_TO_BACKEND;
+    config.forwardPutTransfersToBackend = cfg.FORWARD_PUT_TRANSFERS_TO_BACKEND;
     config.enableTestFeatures = cfg.ENABLE_TEST_FEATURES.toLowerCase() === 'true' ? true : false;
 };
 

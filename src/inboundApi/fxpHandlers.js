@@ -6,6 +6,7 @@
  *                                                                        *
  *  ORIGINAL AUTHOR:                                                      *
  *       James Bush - james.bush@modusbox.com                             *
+ *       Ramiro González Maciel - ramiro@modusbox.com                     *
  **************************************************************************/
 
 'use strict';
@@ -14,6 +15,13 @@ const util = require('util');
 const FxpInboundModel = require('@internal/model').fxpInboundModel;
 const FxpBackendRequests = require('@internal/fxpRequests').FxpBackendRequests;
 
+// Default factories
+let fxpInboundModelFactory = (options) => new FxpInboundModel(options);
+let fxpBackendRequestsFactory = (options) => new FxpBackendRequests(options);
+
+// Factory setters
+const setFxpInboundModelFactory = (f) => fxpInboundModelFactory = f;
+const setFxpBackendRequestsFactory = (f) => fxpBackendRequestsFactory = f;
 /**
  * Handles a GET /participants/{idType}/{idValue} request 
  */
@@ -56,8 +64,7 @@ const postQuotes = async (ctx) => {
     (async () => {
         try {
             // use the transfers model to execute asynchronous stages with the switch
-            // FIXME this is impossible to inject via a test fixture.
-            const model = new FxpInboundModel({
+            const model = fxpInboundModelFactory({
                 cache: ctx.state.cache,
                 logger: ctx.state.logger,
                 ...ctx.state.conf
@@ -91,7 +98,7 @@ const postTransfers = async (ctx) => {
     (async () => {
         try {
             // use the transfers model to execute asynchronous stages with the switch
-            const model = new FxpInboundModel({
+            const model = fxpInboundModelFactory({
                 cache: ctx.state.cache,
                 logger: ctx.state.logger,
                 ...ctx.state.conf
@@ -145,16 +152,27 @@ const putPartiesByTypeAndId = async (ctx) => {
  * Handles a PUT /quotes/{ID}. This is a response to a POST /quotes request
  */
 const putQuoteById = async (ctx) => {
-    let fxpBackendRequests = new FxpBackendRequests({
-        logger: ctx.state.logger,
-        backendEndpoint: ctx.state.conf.backendEndpoint,
-        dfspId: ctx.state.conf.dfspId
-    });
 
-    // FIXME should we wait here to return a 200? Or instead return a 200 and fire an async forward?
-    let response = await fxpBackendRequests.postFxpQuoteResponse(ctx.state.path.params.ID, ctx.request.body.quoteResponse ? ctx.request.body.quoteResponse : ctx.request.body , 
-        { ...ctx.request.headers, ...ctx.request.body.metadata });
-    console.log('Sent PUT /quotes to backend and got back: ', response);
+    // If forwarding (usually while the SDK is working as a passthrough or Hub emulator while testing an integration)
+    if (ctx.state.conf.forwardPutQuotesToBackend) {
+        let fxpBackendRequests = fxpBackendRequestsFactory({
+            logger: ctx.state.logger,
+            backendEndpoint: ctx.state.conf.backendEndpoint,
+            dfspId: ctx.state.conf.dfspId
+        });
+        
+        let response = await fxpBackendRequests.postFxpQuoteResponse(ctx.state.path.params.ID, ctx.request.body.quoteResponse ? ctx.request.body.quoteResponse : ctx.request.body , 
+            { ...ctx.request.headers, ...ctx.request.body.metadata });
+        console.log('Sent PUT /quotes to backend and got back: ', response);
+
+    } else {
+        // publish an event onto the cache for subscribers to action
+        await ctx.state.cache.publish(`${ctx.state.path.params.ID}`, {
+            type: 'quoteResponse',
+            data: ctx.request.body,
+            headers: ctx.request.headers
+        });
+    }
 
     ctx.response.status = 200;
 };
@@ -164,18 +182,29 @@ const putQuoteById = async (ctx) => {
  * Handles a PUT /transfers/{ID}. This is a response to a POST /transfers request 
  */
 const putTransfersById = async (ctx) => {
-    let fxpBackendRequests = new FxpBackendRequests({
-        logger: ctx.state.logger,
-        backendEndpoint: ctx.state.conf.backendEndpoint,
-        dfspId: ctx.state.conf.dfspId
-    });
-    
-    // FIXME should we wait here to return a 200? Or instead return a 200 and fire an async forward?
-    // FIXME validate implementation
-    let response = await fxpBackendRequests.postFxpTransferResponse(ctx.state.path.params.ID, ctx.request.body, ctx.request.headers['fspiop-source'], ctx.request.headers['fspiop-destination']);
-    console.log('Sent PUT /transfers to backend and got back: ', response);
+    // If forwarding (usually while the SDK is working as a passthrough or Hub emulator)
+    // FIXME implement forwardPutTransfersToBackend loading on config
+    if (ctx.state.conf.forwardPutTransfersToBackend) {
+        let fxpBackendRequests = fxpBackendRequestsFactory({
+            logger: ctx.state.logger,
+            backendEndpoint: ctx.state.conf.backendEndpoint,
+            dfspId: ctx.state.conf.dfspId
+        });
+        
+        // FIXME validate implementation
+        let response = await fxpBackendRequests.postFxpTransferResponse(ctx.state.path.params.ID, ctx.request.body, ctx.request.headers['fspiop-source'], ctx.request.headers['fspiop-destination']);
+        console.log('Sent PUT /transfers to backend and got back: ', response);
 
-    ctx.response.status = 200;
+    } else {
+        // publish an event onto the cache for subscribers to action
+        await ctx.state.cache.publish(`${ctx.state.path.params.ID}`, {
+            type: 'transferFulfil',
+            data: ctx.request.body,
+            headers: ctx.request.headers
+        });
+    }
+
+    ctx.response.status = 200;    
 };
 
 
@@ -262,5 +291,7 @@ const map = {
 
 
 module.exports = {
-    map
+    map,
+    setFxpInboundModelFactory,
+    setFxpBackendRequestsFactory
 };
