@@ -155,6 +155,8 @@ const putQuoteById = async (ctx) => {
 
     // If forwarding (usually while the SDK is working as a passthrough or Hub emulator while testing an integration)
     if (ctx.state.conf.forwardPutQuotesToBackend) {
+        ctx.state.logger.log(`putQuoteById: forwardPutQuotesToBackend is true. Forwarding ${util.inspect(ctx.state.path.params.ID)}`);
+
         let fxpBackendRequests = fxpBackendRequestsFactory({
             logger: ctx.state.logger,
             backendEndpoint: ctx.state.conf.backendEndpoint,
@@ -163,7 +165,7 @@ const putQuoteById = async (ctx) => {
         
         let response = await fxpBackendRequests.postFxpQuoteResponse(ctx.state.path.params.ID, ctx.request.body.quoteResponse ? ctx.request.body.quoteResponse : ctx.request.body , 
             { ...ctx.request.headers, ...ctx.request.body.metadata });
-        console.log('Sent PUT /quotes to backend and got back: ', response);
+        ctx.state.logger.log('Sent PUT /quotes to backend and got back: ', response);
 
     } else {
         // publish an event onto the cache for subscribers to action
