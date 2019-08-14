@@ -86,7 +86,7 @@ const setConfig = async cfg => {
 
     config.peerEndpoint = cfg.PEER_ENDPOINT;
     config.backendEndpoint = cfg.BACKEND_ENDPOINT;
-    config.fxpModeEnabled = cfg.FXP_MODE_ENABLED;
+    config.fxpModeEnabled = cfg.FXP_MODE_ENABLED && cfg.FXP_MODE_ENABLED.toLowerCase() === 'true' ? true : false;
     
     config.dfspId = cfg.DFSP_ID;
     config.ilpSecret = cfg.ILP_SECRET;
@@ -138,9 +138,9 @@ const setConfig = async cfg => {
         config.peerRoutingConfig = JSON.parse(await readFile(cfg.PEER_ROUTING_CONFIG));
     }
 
-    config.forwardPutQuotesToBackend = cfg.FORWARD_PUT_QUOTES_TO_BACKEND.toLowerCase() === 'true' ? true : false;
-    config.forwardPutTransfersToBackend = cfg.FORWARD_PUT_TRANSFERS_TO_BACKEND.toLowerCase() === 'true' ? true : false;
-    config.enableTestFeatures = cfg.ENABLE_TEST_FEATURES.toLowerCase() === 'true' ? true : false;
+    config.forwardPutQuotesToBackend = cfg.FORWARD_PUT_QUOTES_TO_BACKEND && cfg.FORWARD_PUT_QUOTES_TO_BACKEND.toLowerCase() === 'true' ? true : false;
+    config.forwardPutTransfersToBackend = cfg.FORWARD_PUT_TRANSFERS_TO_BACKEND && cfg.FORWARD_PUT_TRANSFERS_TO_BACKEND.toLowerCase() === 'true' ? true : false;
+    config.enableTestFeatures = cfg.ENABLE_TEST_FEATURES && cfg.ENABLE_TEST_FEATURES.toLowerCase() === 'true' ? true : false;
 };
 
 
