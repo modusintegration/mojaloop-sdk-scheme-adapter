@@ -56,7 +56,7 @@ const postPartiesByTypeAndId = (ctx) => {
 const postQuotes = async (ctx) => {
     if (!ctx.fxpQuote) {
         ctx.response.status = 400;
-        ctx.response.body = 'Can not handle non FXP quotes'; // FIXME
+        ctx.response.body = 'Can not handle non FXP quotes'; // FIXME Is this the correct format for the response?
         return;
     }
 

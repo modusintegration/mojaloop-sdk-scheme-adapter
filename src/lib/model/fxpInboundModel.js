@@ -190,7 +190,7 @@ class FxpInboundModel {
         // cancel the timeout handler
         // clearTimeout(timeout); // FIXME implement timeouts
 
-        // clean quoteId from response if there. The SDK returns it as part of a quote response but it's not part of it per the Mojaloop spec ( FIXME find proper reference )
+        // clean quoteId from response if there. A previous version of the SDK returns it as part of a quote response but it's not part of it per the Mojaloop spec ( FIXME find proper reference )
         delete secondStageQuoteResponse['quoteId'];
         this.logger.log(`[Quotes 28B] Received response to second stage quote: ${util.inspect(secondStageQuoteResponse)} with headers: ${util.inspect(secondStageQuoteResponseHeaders)}`);
         // stop listening for payee resolution messages
@@ -217,7 +217,7 @@ class FxpInboundModel {
         }
         const sourceFspId = composedResponseToOriginalQuote.metadata.sourceFSP;
         const destinationFspId = composedResponseToOriginalQuote.metadata.destinationFSP;
-        this.logger.log(`[Quotes 30] FXP QUOTE : creating quote response IlpPacker, condition and fulfilment on ${util.inspect(composedResponseToOriginalQuote)}`);
+        this.logger.log(`[Quotes 30] FXP QUOTE : creating quote response IlpPacket, condition and fulfilment on ${util.inspect(composedResponseToOriginalQuote)}`);
 
         const responseToOriginalQuote = composedResponseToOriginalQuote.quoteResponse;
 
@@ -236,6 +236,7 @@ class FxpInboundModel {
 
         // now store the fulfilment and the quote data against the quoteId in our cache
         // as we are going to use this on the transfer processing
+        // FIXME Maybe use transaction_ as the prefix? instead of quote_
         await this.cache.set(`quote_${originalQuoteRequest.transactionId}`, {
             originalQuoteSourceFspId,
             originalQuoteDestinationFspId,
@@ -245,7 +246,7 @@ class FxpInboundModel {
             responseToOriginalQuote,
             secondStageQuote,
             secondStageQuoteResponse,
-            mojaloopResponse: responseToOriginalQuote,
+            mojaloopResponse: responseToOriginalQuote, // FIXME This alias is not needed in fxpModel?
             fulfilment,
             fxpQuote: true
         });
