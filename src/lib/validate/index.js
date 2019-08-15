@@ -17,7 +17,7 @@ const paramsToJsonSchema = require('openapi-jsonschema-parameters').convertParam
 const jsrp = require('json-schema-ref-parser');
 const util = require('util');
 
-const { Errors } = require('@modusintegration/mojaloop-sdk-standard-components');
+const { Errors } = require('@modusbox/mojaloop-sdk-standard-components');
 
 // Don't stop at the first error, we'll let the user know what all their errors are. Also, when we
 // validate, coerce types to those we're interested in where possible.
@@ -178,7 +178,7 @@ class Validator {
         const validationResult = path.methods[ctx.method.toLowerCase()].validator(ctx, path.params);
 
         if (validationResult !== undefined && validationResult.length > 0) {
-            logger.log(`Validation errors: ${util.inspect(validationResult)}`);
+            logger.push({ validationResult }).log('Validation result');
 
             let err;
             const firstError = validationResult[0];

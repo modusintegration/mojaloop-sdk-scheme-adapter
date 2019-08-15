@@ -12,13 +12,13 @@
 
 const util = require('util');
 const Model = require('@internal/model').inboundTransfersModel;
-const FxpBackendRequests = require('@internal/requests').FxpBackendRequests;
+const { Errors } = require('@modusbox/mojaloop-sdk-standard-components');
 
 /**
- * Handles a GET /participants/{idType}/{idValue} request 
+ * Handles a GET /participants/{idType}/{idValue} request
  */
 const getParticipantsByTypeAndId = async (ctx) => {
-    // kick off an asyncronous operation to handle the request
+    // kick off an asynchronous operation to handle the request
     (async () => {
         try {
             // use the transfers model to execute asynchronous stages with the switch
@@ -35,11 +35,11 @@ const getParticipantsByTypeAndId = async (ctx) => {
                 ctx.state.path.params.ID, sourceFspId);
 
             // log the result
-            ctx.state.logger.log(`Inbound transfers model handled GET /participants/{idType}/{idValue} request and returned: ${util.inspect(response)}`);
+            ctx.state.logger.push({ response }).log('Inbound transfers model handled GET /participants/{idType}/{idValue}');
         }
         catch(err) {
             // nothing we can do if an error gets thrown back to us here apart from log it and continue
-            ctx.state.logger.log(`Error handling GET /participants/{idType}/{idValue}: ${err.stack || util.inspect(err)}`);
+            ctx.state.logger.push({ err }).log('Error handling GET /participants/{idType}/{idValue}');
         }
     })();
 
@@ -57,6 +57,15 @@ const getPartiesByTypeAndId = async (ctx) => {
     // kick off an asyncronous operation to handle the request
     (async () => {
         try {
+            if(ctx.state.conf.enableTestFeatures) {
+                // we are in test mode so cache the request
+                const req = {
+                    headers: ctx.request.headers
+                };
+                const res = await ctx.state.cache.set(`request_${ctx.state.path.params.ID}`, req);
+                ctx.state.logger.log(`Cacheing request : ${util.inspect(res)}`);
+            }
+
             // use the transfers model to execute asynchronous stages with the switch
             const model = new Model({
                 cache: ctx.state.cache,
@@ -70,11 +79,11 @@ const getPartiesByTypeAndId = async (ctx) => {
             const response = await model.getParties(ctx.state.path.params.Type, ctx.state.path.params.ID, sourceFspId);
 
             // log the result
-            ctx.state.logger.log(`Inbound transfers model handled GET /parties/{idType}/{idValue} request and returned: ${util.inspect(response)}`);
+            ctx.state.logger.push({ response }).log('Inbound transfers model handled GET /parties/{idType}/{idValue} request');
         }
         catch(err) {
             // nothing we can do if an error gets thrown back to us here apart from log it and continue
-            ctx.state.logger.log(`Error handling GET /parties/{idType}/{idValue}: ${err.stack || util.inspect(err)}`);
+            ctx.state.logger.push({ err }).log('Error handling GET /parties/{idType}/{idValue}');
         }
     })();
 
@@ -86,7 +95,7 @@ const getPartiesByTypeAndId = async (ctx) => {
 
 
 /**
- * Handles a POST /parties/{idType}/{idValue} request 
+ * Handles a POST /parties/{idType}/{idValue} request
  */
 const postPartiesByTypeAndId = (ctx) => {
     // creation of parties not supported by SDK
@@ -102,6 +111,16 @@ const postQuotes = async (ctx) => {
     // kick off an asyncronous operation to handle the request
     (async () => {
         try {
+            if(ctx.state.conf.enableTestFeatures) {
+                // we are in test mode so cache the request
+                const req = {
+                    headers: ctx.request.headers,
+                    data: ctx.request.body
+                };
+                const res = await ctx.state.cache.set(`request_${ctx.request.body.quoteId}`, req);
+                ctx.state.logger.log(`Cacheing request: ${util.inspect(res)}`);
+            }
+
             // use the transfers model to execute asynchronous stages with the switch
             const model = new Model({
                 cache: ctx.state.cache,
@@ -109,20 +128,17 @@ const postQuotes = async (ctx) => {
                 ...ctx.state.conf
             });
 
-            // use the model to handle the request
-            if (ctx.fxpQuote) {
-                const response = await model.fxQuoteRequest(ctx.request.headers, ctx.request.body);
-                ctx.state.logger.log(`Inbound transfers model handled FX POST /quotes request and returned: ${util.inspect(response)}`);
+            const sourceFspId = ctx.request.headers['fspiop-source'];
 
-            } else {
-                const sourceFspId = ctx.request.headers['fspiop-source'];
-                const response = await model.quoteRequest(ctx.request.body, sourceFspId);
-                ctx.state.logger.log(`Inbound transfers model handled POST /quotes request and returned: ${util.inspect(response)}`);
-            }
+            // use the model to handle the request
+            const response = await model.quoteRequest(ctx.request.body, sourceFspId);
+
+            // log the result
+            ctx.state.logger.push({ response }).log('Inbound transfers model handled POST /quotes request');
         }
         catch(err) {
             // nothing we can do if an error gets thrown back to us here apart from log it and continue
-            ctx.state.logger.log(`Error handling POST /quotes: ${err.stack || util.inspect(err)}`);
+            ctx.state.logger.push({ err }).log('Error handling POST /quotes');
         }
     })();
 
@@ -140,6 +156,16 @@ const postTransfers = async (ctx) => {
     // kick off an asyncronous operation to handle the request
     (async () => {
         try {
+            if(ctx.state.conf.enableTestFeatures) {
+                // we are in test mode so cache the request
+                const req = {
+                    headers: ctx.request.headers,
+                    data: ctx.request.body
+                };
+                const res = await ctx.state.cache.set(`request_${ctx.request.body.transferId}`, req);
+                ctx.state.logger.log(`Cacheing request: ${util.inspect(res)}`);
+            }
+
             // use the transfers model to execute asynchronous stages with the switch
             const model = new Model({
                 cache: ctx.state.cache,
@@ -148,17 +174,16 @@ const postTransfers = async (ctx) => {
             });
 
             const sourceFspId = ctx.request.headers['fspiop-source'];
-            const destinationFspId = ctx.request.headers['fspiop-destination'];
 
             // use the model to handle the request
-            const response = await model.prepareTransfer(ctx.request.body, sourceFspId, destinationFspId);
+            const response = await model.prepareTransfer(ctx.request.body, sourceFspId);
 
             // log the result
-            ctx.state.logger.log(`Inbound transfers model handled POST /transfers request and returned: ${util.inspect(response)}`);
+            ctx.state.logger.push({ response }).log('Inbound transfers model handled POST /transfers request');
         }
         catch(err) {
             // nothing we can do if an error gets thrown back to us here apart from log it and continue
-            ctx.state.logger.log(`Error handling POST /transfers: ${err.stack || util.inspect(err)}`);
+            ctx.state.logger.push({ err }).log('Error handling POST /transfers');
         }
     })();
 
@@ -184,6 +209,16 @@ const putParticipantsByTypeAndId = async (ctx) => {
  * request.
  */
 const putPartiesByTypeAndId = async (ctx) => {
+    if(ctx.state.conf.enableTestFeatures) {
+        // we are in test mode so cache the request
+        const req = {
+            headers: ctx.request.headers,
+            data: ctx.request.body
+        };
+        const res = await ctx.state.cache.set(`callback_${ctx.state.path.params.ID}`, req);
+        ctx.state.logger.log(`Cacheing request: ${util.inspect(res)}`);
+    }
+
     const idType = ctx.state.path.params.Type;
     const idValue = ctx.state.path.params.ID;
 
@@ -198,57 +233,45 @@ const putPartiesByTypeAndId = async (ctx) => {
  * Handles a PUT /quotes/{ID}. This is a response to a POST /quotes request
  */
 const putQuoteById = async (ctx) => {
-    // If forwarding (usually while the SDK is working as a passthrough or Hub emulator)
-    if (ctx.state.conf.forwardPutQuotesToBackend) {
-        let fxpBackendRequests = new FxpBackendRequests({
-            logger: ctx.state.logger,
-            backendEndpoint: ctx.state.conf.backendEndpoint,
-            dfspId: ctx.state.conf.dfspId
-        });
-        
-        let response = await fxpBackendRequests.postFxpQuoteResponse(ctx.state.path.params.ID, ctx.request.body.quoteResponse ? ctx.request.body.quoteResponse : ctx.request.body , 
-            { ...ctx.request.headers, ...ctx.request.body.metadata });
-        console.log('Sent PUT /quotes to backend and got back: ', response);
-
-    } else {
-        // publish an event onto the cache for subscribers to action
-        await ctx.state.cache.publish(`${ctx.state.path.params.ID}`, {
-            type: 'quoteResponse',
-            data: ctx.request.body,
-            headers: ctx.request.headers
-        });
+    if(ctx.state.conf.enableTestFeatures) {
+        // we are in test mode so cache the request
+        const req = {
+            headers: ctx.request.headers,
+            data: ctx.request.body
+        };
+        const res = await ctx.state.cache.set(`callback_${ctx.state.path.params.ID}`, req);
+        ctx.state.logger.log(`Cacheing callback: ${util.inspect(res)}`);
     }
 
-    ctx.response.status = 200;
+    // publish an event onto the cache for subscribers to action
+    await ctx.state.cache.publish(`${ctx.state.path.params.ID}`, {
+        type: 'quoteResponse',
+        data: ctx.request.body
+    });
 
+    ctx.response.status = 200;
 };
 
 
 /**
- * Handles a PUT /transfers/{ID}. This is a response to a POST /transfers request 
+ * Handles a PUT /transfers/{ID}. This is a response to a POST /transfers request
  */
 const putTransfersById = async (ctx) => {
-    // If forwarding (usually while the SDK is working as a passthrough or Hub emulator)
-    // FIXME implement forwardPutTransfersToBackend loading on config
-    if (ctx.state.conf.forwardPutTransfersToBackend) {
-        let fxpBackendRequests = new FxpBackendRequests({
-            logger: ctx.state.logger,
-            backendEndpoint: ctx.state.conf.backendEndpoint,
-            dfspId: ctx.state.conf.dfspId
-        });
-        
-        // FIXME validate implementation
-        let response = await fxpBackendRequests.postFxpTransferResponse(ctx.state.path.params.ID, ctx.request.body, ctx.request.headers['fspiop-source'], ctx.request.headers['fspiop-destination']);
-        console.log('Sent PUT /transfers to backend and got back: ', response);
-
-    } else {
-        // publish an event onto the cache for subscribers to action
-        await ctx.state.cache.publish(`${ctx.state.path.params.ID}`, {
-            type: 'transferFulfil',
-            data: ctx.request.body,
-            headers: ctx.request.headers
-        });
+    if(ctx.state.conf.enableTestFeatures) {
+        // we are in test mode so cache the request
+        const req = {
+            headers: ctx.request.headers,
+            data: ctx.request.body
+        };
+        const res = await ctx.state.cache.set(`callback_${ctx.state.path.params.ID}`, req);
+        ctx.state.logger.log(`Cacheing callback: ${util.inspect(res)}`);
     }
+
+    // publish an event onto the cache for subscribers to action
+    await ctx.state.cache.publish(`${ctx.state.path.params.ID}`, {
+        type: 'transferFulfil',
+        data: ctx.request.body
+    });
 
     ctx.response.status = 200;
 };
@@ -258,6 +281,16 @@ const putTransfersById = async (ctx) => {
  * Handles a PUT /parties/{Type}/{ID}/error request. This is an error response to a GET /parties/{Type}/{ID} request
  */
 const putPartiesByTypeAndIdError = async(ctx) => {
+    if(ctx.state.conf.enableTestFeatures) {
+        // we are in test mode so cache the request
+        const req = {
+            headers: ctx.request.headers,
+            data: ctx.request.body
+        };
+        const res = await ctx.state.cache.set(`callback_${ctx.state.path.params.ID}`, req);
+        ctx.state.logger.log(`Cacheing request: ${util.inspect(res)}`);
+    }
+
     const idType = ctx.state.path.params.Type;
     const idValue = ctx.state.path.params.ID;
 
@@ -273,9 +306,19 @@ const putPartiesByTypeAndIdError = async(ctx) => {
 
 
 /**
- * Handles a PUT /quotes/{ID}/error request. This is an error response to a POST /quotes request 
+ * Handles a PUT /quotes/{ID}/error request. This is an error response to a POST /quotes request
  */
 const putQuotesByIdError = async(ctx) => {
+    if(ctx.state.conf.enableTestFeatures) {
+        // we are in test mode so cache the request
+        const req = {
+            headers: ctx.request.headers,
+            data: ctx.request.body
+        };
+        const res = await ctx.state.cache.set(`callback_${ctx.state.path.params.ID}`, req);
+        ctx.state.logger.log(`Cacheing callback: ${util.inspect(res)}`);
+    }
+
     // publish an event onto the cache for subscribers to action
     await ctx.state.cache.publish(`${ctx.state.path.params.ID}`, {
         type: 'quoteResponseError',
@@ -288,9 +331,19 @@ const putQuotesByIdError = async(ctx) => {
 
 
 /**
- * Handles a PUT /transfers/{ID}/error. This is an error response to a POST /transfers request 
+ * Handles a PUT /transfers/{ID}/error. This is an error response to a POST /transfers request
  */
 const putTransfersByIdError = async (ctx) => {
+    if(ctx.state.conf.enableTestFeatures) {
+        // we are in test mode so cache the request
+        const req = {
+            headers: ctx.request.headers,
+            data: ctx.request.body
+        };
+        const res = await ctx.state.cache.set(`callback_${ctx.state.path.params.ID}`, req);
+        ctx.state.logger.log(`Cacheing callback: ${util.inspect(res)}`);
+    }
+
     // publish an event onto the cache for subscribers to action
     await ctx.state.cache.publish(`${ctx.state.path.params.ID}`, {
         type: 'transferError',
@@ -308,6 +361,52 @@ const healthCheck = async(ctx) => {
 };
 
 
+/**
+ * Handles a GET /requests/{ID} request. This is a test support method that allows the caller
+ * to see the body of a previous incoming request.
+ */
+const getRequestById = async(ctx) => {
+    if(!ctx.state.conf.enableTestFeatures) {
+        // hide this endpoint if test features are disabled
+        throw new Errors.MojaloopFSPIOPError(null, 'Couldn\'t match path requests', null,
+            Errors.MojaloopApiErrorCodes.UNKNOWN_URI);
+    }
+
+    try {
+        const req = await ctx.state.cache.get(`request_${ctx.state.path.params.ID}`);
+        ctx.response.status = 200;
+        ctx.response.body = req;
+    }
+    catch(err) {
+        ctx.status = 500;
+        ctx.response.body = err;
+    }
+};
+
+
+/**
+ * Handles a GET /callbacks/{ID} request. This is a test support method that allows the caller
+ * to see the body of a previous incoming callback.
+ */
+const getCallbackById = async(ctx) => {
+    if(!ctx.state.conf.enableTestFeatures) {
+        // hide this endpoint if test features are disabled
+        throw new Errors.MojaloopFSPIOPError(null, 'Couldn\'t match path /callbacks', null,
+            Errors.MojaloopApiErrorCodes.UNKNOWN_URI);
+    }
+
+    try {
+        const req = await ctx.state.cache.get(`callback_${ctx.state.path.params.ID}`);
+        ctx.response.status = 200;
+        ctx.response.body = req;
+    }
+    catch(err) {
+        ctx.status = 500;
+        ctx.response.body = err;
+    }
+};
+
+
 const map = {
     '/': {
         get: healthCheck
@@ -322,7 +421,7 @@ const map = {
         put: putPartiesByTypeAndId
     },
     '/parties/{Type}/{ID}/error': {
-        put: putPartiesByTypeAndIdError,
+        put: putPartiesByTypeAndIdError
     },
     '/quotes': {
         post: postQuotes
@@ -341,6 +440,12 @@ const map = {
     },
     '/transfers/{ID}/error': {
         put: putTransfersByIdError
+    },
+    '/requests/{ID}': {
+        get: getRequestById
+    },
+    '/callbacks/{ID}': {
+        get: getCallbackById
     }
 };
 

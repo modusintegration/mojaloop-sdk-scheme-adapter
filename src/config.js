@@ -29,6 +29,11 @@ async function readFile(...args) {
     return p;
 }
 
+async function readFilesDelimitedList(delimiter, list) {
+    return Promise.all(list.split(delimiter).map(filename => readFile(filename)));
+}
+
+
 
 // TODO: implement toString, toJSON toAnythingElse methods on config so that secrets can't be
 // printed
@@ -37,7 +42,9 @@ let config = {
     outboundPort: 4001,
     peerEndpoint: 'peerEndpoint:3001',
     backendEndpoint: 'backendEndpoint:3001',
-    forwardPutTransfersToBackend: true,
+    fxpModeEnabled: false,
+    forwardPutQuotesToBackend: false,
+    forwardPutTransfersToBackend: false,
     dfspId: 'mojaloop-sdk',
     ilpSecret: 'mojaloop-sdk',
     checkIlp: true,
@@ -63,7 +70,8 @@ let config = {
     cacheConfig: {
         host: 'localhost',
         port: 6379
-    }
+    },
+    enableTestFeatures: false
 };
 
 /**
@@ -78,7 +86,8 @@ const setConfig = async cfg => {
 
     config.peerEndpoint = cfg.PEER_ENDPOINT;
     config.backendEndpoint = cfg.BACKEND_ENDPOINT;
-
+    config.fxpModeEnabled = cfg.FXP_MODE_ENABLED && cfg.FXP_MODE_ENABLED.toLowerCase() === 'true' ? true : false;
+    
     config.dfspId = cfg.DFSP_ID;
     config.ilpSecret = cfg.ILP_SECRET;
     config.checkIlp = cfg.CHECK_ILP.toLowerCase() === 'false' ? false : true;
@@ -90,14 +99,14 @@ const setConfig = async cfg => {
     if (config.tls.mutualTLS.enabled) {
         // read inbound certs/keys
         [config.tls.inboundCreds.ca, config.tls.inboundCreds.cert, config.tls.inboundCreds.key] = await Promise.all([
-            readFile(cfg.IN_CA_CERT_PATH),
+            readFilesDelimitedList(',', cfg.IN_CA_CERT_PATH),
             readFile(cfg.IN_SERVER_CERT_PATH),
             readFile(cfg.IN_SERVER_KEY_PATH)
         ]);
 
         //read outbound certs/keys
         [config.tls.outboundCreds.ca, config.tls.outboundCreds.cert, config.tls.outboundCreds.key] = await Promise.all([
-            readFile(cfg.OUT_CA_CERT_PATH),
+            readFilesDelimitedList(',', cfg.OUT_CA_CERT_PATH),
             readFile(cfg.OUT_CLIENT_CERT_PATH),
             readFile(cfg.OUT_CLIENT_KEY_PATH)
         ]);
@@ -129,7 +138,9 @@ const setConfig = async cfg => {
         config.peerRoutingConfig = JSON.parse(await readFile(cfg.PEER_ROUTING_CONFIG));
     }
 
-    config.forwardPutQuotesToBackend = cfg.FORWARD_PUT_QUOTES_TO_BACKEND;
+    config.forwardPutQuotesToBackend = cfg.FORWARD_PUT_QUOTES_TO_BACKEND && cfg.FORWARD_PUT_QUOTES_TO_BACKEND.toLowerCase() === 'true' ? true : false;
+    config.forwardPutTransfersToBackend = cfg.FORWARD_PUT_TRANSFERS_TO_BACKEND && cfg.FORWARD_PUT_TRANSFERS_TO_BACKEND.toLowerCase() === 'true' ? true : false;
+    config.enableTestFeatures = cfg.ENABLE_TEST_FEATURES && cfg.ENABLE_TEST_FEATURES.toLowerCase() === 'true' ? true : false;
 };
 
 

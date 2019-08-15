@@ -10,7 +10,6 @@
 
 'use strict';
 
-const util = require('util');
 const request = require('request-promise-native');
 
 const http = require('http');
@@ -96,57 +95,53 @@ class BackendRequests {
         // Note we do not JWS sign requests with no body i.e. GET requests
 
         try {
-            this.logger.log(`Executing HTTP GET: ${util.inspect(reqOpts)}`);
+            this.logger.push({ reqOpts }).log('Executing HTTP GET');
             return await request(reqOpts).then(throwOrJson);
         }
         catch (e) {
-            this.logger.log('Error attempting GET. URL:', url, 'Opts:', reqOpts, 'Error:', e);
+            this.logger.push({ url, reqOpts, e }).log('Error attempting HTTP GET');
             throw e;
         }
     }
 
 
-    async _put(url, body, headers, returnHeaders) {
+    async _put(url, body) {
         const reqOpts = {
             method: 'PUT',
             uri: buildUrl(this.backendEndpoint, url),
-            headers: headers ? headers : this._buildHeaders(),
+            headers: this._buildHeaders(),
             body: JSON.stringify(body),
             resolveWithFullResponse: true,
             simple: false,
         };
 
         try {
-            this.logger.log(`Executing HTTP PUT: ${util.inspect(reqOpts)}`);
-            const response = await request(reqOpts);
-            const responseBody = await throwOrJson(response);
-            return returnHeaders ? { headers: response.headers, body: responseBody } : responseBody;
+            this.logger.push({ reqOpts }).log('Executing HTTP PUT');
+            return await request(reqOpts).then(throwOrJson);
         }
         catch (e) {
-            this.logger.log('Error attempting PUT. URL:', url, 'Opts:', reqOpts, 'Body:', body, 'Error:', e);
+            this.logger.push({ url, reqOpts, e }).log('Error attempting HTTP PUT');
             throw e;
         }
     }
 
 
-    async _post(url, body, headers, returnHeaders) {
+    async _post(url, body) {
         const reqOpts = {
             method: 'POST',
             uri: buildUrl(this.backendEndpoint, url),
-            headers: headers ? headers : this._buildHeaders(),
+            headers: this._buildHeaders(),
             body: JSON.stringify(body),
             resolveWithFullResponse: true,
             simple: false,
         };
 
         try {
-            this.logger.log(`Executing HTTP POST: ${util.inspect(reqOpts)}`);
-            const response = await request(reqOpts);
-            const responseBody = await throwOrJson(response);
-            return returnHeaders ? { headers: response.headers, body: responseBody } : responseBody;
+            this.logger.push({ reqOpts }).log('Executing HTTP POST');
+            return await request(reqOpts).then(throwOrJson);
         }
         catch (e) {
-            this.logger.log('Error attempting POST. URL:', url, 'Opts:', reqOpts, 'Body:', body, 'Error:', e);
+            this.logger.push({ url, reqOpts, e }).log('Error attempting POST.');
             throw e;
         }
     }

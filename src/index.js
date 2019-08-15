@@ -23,7 +23,6 @@ const yaml = require('yamljs');
 const randomPhrase = require('@internal/randomphrase');
 const Validate = require('@internal/validate');
 
-const inboundHandlers = require('./inboundApi/handlers.js');
 const outboundHandlers = require('./outboundApi/handlers.js');
 
 const router = require('@internal/router');
@@ -38,8 +37,8 @@ const outboundApi = new Koa();
 const inboundApiSpec = yaml.load('./src/inboundApi/api.yaml');
 const outboundApiSpec = yaml.load('./src/outboundApi/api.yaml');
 
-const Jws = require('@modusintegration/mojaloop-sdk-standard-components').Jws;
-const Errors = require('@modusintegration/mojaloop-sdk-standard-components').Errors;
+const Jws = require('@modusbox/mojaloop-sdk-standard-components').Jws;
+const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
 
 const FSPIOP_SourceCurrencyHeader = 'FSPIOP-SourceCurrency'.toLowerCase();
 const FSPIOP_DestinationCurrencyHeader = 'FSPIOP-DestinationCurrency'.toLowerCase();
@@ -50,7 +49,9 @@ const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
     // Set up the config from the environment
     await setConfig(process.env);
     const conf = getConfig();
-    console.log('Current config:', conf);
+
+    console.log(`Config loaded: ${util.inspect(conf, { depth: 10 })}`);
+
     // Set up a logger for each running server
     const space = Number(process.env.LOG_INDENT);
 
@@ -124,7 +125,7 @@ const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
             }
             catch(err) {
                 // error parsing body
-                inboundLogger.log(`Error parsing body: ${err.stack || util.inspect(err)}`);
+                inboundLogger.push({ err }).log('Error parsing body');
                 ctx.response.status = 400;
                 ctx.response.body = new Errors.MojaloopFSPIOPError(err, err.message, null,
                     Errors.MojaloopApiErrorCodes.MALFORMED_SYNTAX).toApiErrorObject();
@@ -134,13 +135,51 @@ const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
         await next();
     });
 
-    inboundApi.use(async (ctx, next) => {
-        // If the request has the currency headers, then it's a FX Quote
-        if ( ctx.request.method !== 'GET' && (ctx.request.headers[FSPIOP_SourceCurrencyHeader] || ctx.request.headers[FSPIOP_DestinationCurrencyHeader] )) {
-            ctx.fxpQuote = true;
+    if (conf.fxpModeEnabled) {
+        inboundApi.use(async (ctx, next) => {
+            // If the request has the currency headers, then it's a FX Quote
+            if ( ctx.request.method !== 'GET' && ctx.request.headers[FSPIOP_SourceCurrencyHeader] && ctx.request.headers[FSPIOP_DestinationCurrencyHeader]) {
+                ctx.fxpQuote = true;
+            }
+            await next();
+        });   
+    }
+
+    // Used to rebuild the original request when processing a FXP request
+    const buildOriginalRequest = ctx => {
+        const payerFspId = ctx && ctx.request && ctx.request.body.payer && ctx.request.body.payer.partyIdInfo && ctx.request.body.payer.partyIdInfo.fspId ? ctx.request.body.payer.partyIdInfo.fspId : null;
+        if (!payerFspId) {
+            const errorMessage = `Inbound FXP quote request failed JWS validation: payer party fspId not found in body ${ctx.request.body}`;
+            inboundLogger.log(errorMessage);
+
+            throw new Errors.MojaloopFSPIOPError({error: 'Invalid FXP quote request'}, errorMessage, null,
+                Errors.MojaloopApiErrorCodes.PAYER_FSP_ID_NOT_FOUND).toApiErrorObject();
         }
-        await next();
-    });   
+
+        const payeeFspId = ctx && ctx.request && ctx.request.body.payee && ctx.request.body.payee.partyIdInfo && ctx.request.body.payee.partyIdInfo.fspId ? ctx.request.body.payee.partyIdInfo.fspId : null;
+        if (!payeeFspId) {
+            const errorMessage = `Inbound FXP quote request failed JWS validation: payee party fspId not found in body ${ctx.request.body}`;
+            inboundLogger.log(errorMessage);
+
+            throw new Errors.MojaloopFSPIOPError({error: 'Invalid FXP quote request'}, errorMessage, null,
+                Errors.MojaloopApiErrorCodes.PAYEE_FSP_ID_NOT_FOUND).toApiErrorObject();
+        }
+        // Now rebuild the original request, replacing the "FXP DFSP" by its original value, taken from the body
+        const rebuiltRequest = { headers: {...ctx.request.headers}, body: {...ctx.request.body} };
+        if (ctx.request.headers[FSPIOP_SourceHeader] == payerFspId && ctx.request.headers[FSPIOP_DestinationHeader] != payeeFspId) {
+            rebuiltRequest.headers[FSPIOP_DestinationHeader] = payeeFspId;
+        } else if (ctx.request.headers[FSPIOP_SourceHeader] != payerFspId && ctx.request.headers[FSPIOP_DestinationHeader] == payeeFspId) {
+            rebuiltRequest.headers[FSPIOP_SourceHeader] = payerFspId;
+        } else {
+            const errorMessage = `Inbound FXP quote request failed JWS validation: expected either ${FSPIOP_SourceHeader} to be != payerFspId or ${FSPIOP_DestinationHeader} to be != payeeFspId ` +
+          `but received: FSPIOP_SourceHeader = ${ctx.request.headers[FSPIOP_SourceHeader]}, payerFspId = ${payerFspId} and FSPIOP_DestinationHeader = ${ctx.request.headers[FSPIOP_DestinationHeader]}, payeeFspId = ${payeeFspId}`;
+            inboundLogger.log(errorMessage);
+
+            throw new Errors.MojaloopFSPIOPError({error: 'Invalid FXP quote request'}, errorMessage, null,
+                Errors.MojaloopApiErrorCodes.VALIDATION_ERROR).toApiErrorObject();
+        }
+        return rebuiltRequest;
+    };
 
     // JWS validation for incoming requests
     inboundApi.use(async (ctx, next) => {
@@ -149,58 +188,23 @@ const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
                 if(ctx.request.method !== 'GET') {
                     // If the request is a FX Quote, we need to recreate and validate the original quote
                     if ( ctx.fxpQuote ) {
-                        console.log('\x1b[47m\x1b[30m%s\x1b[0m', 'FXP QUOTE received');
-                        const payerFspId = ctx && ctx.request && ctx.request.body.payer && ctx.request.body.payer.partyIdInfo && ctx.request.body.payer.partyIdInfo.fspId ? ctx.request.body.payer.partyIdInfo.fspId : null;
-                        if (!payerFspId) {
-                            const errorMessage = `Inbound FXP quote request failed JWS validation: payer party fspId not found in body ${ctx.request.body}`;
-                            inboundLogger.log(errorMessage);
-
+                        let rebuiltRequest;
+                        try {
+                            rebuiltRequest = buildOriginalRequest(ctx);
+                        } catch (error) {
                             ctx.response.status = 400;
-                            ctx.response.body = new Errors.MojaloopFSPIOPError({error: 'Invalid FXP quote request'}, errorMessage, null,
-                                Errors.MojaloopApiErrorCodes.PAYER_FSP_ID_NOT_FOUND).toApiErrorObject();
+                            ctx.response.body = error;
                             return;
                         }
-
-                        const payeeFspId = ctx && ctx.request && ctx.request.body.payee && ctx.request.body.payee.partyIdInfo && ctx.request.body.payee.partyIdInfo.fspId ? ctx.request.body.payee.partyIdInfo.fspId : null;
-                        if (!payeeFspId) {
-                            const errorMessage = `Inbound FXP quote request failed JWS validation: payee party fspId not found in body ${ctx.request.body}`;
-                            inboundLogger.log(errorMessage);
-
-                            ctx.response.status = 400;
-                            ctx.response.body = new Errors.MojaloopFSPIOPError({error: 'Invalid FXP quote request'}, errorMessage, null,
-                                Errors.MojaloopApiErrorCodes.PAYEE_FSP_ID_NOT_FOUND).toApiErrorObject();
-                            return;
-                        }
-                        console.log('\x1b[47m\x1b[30m%s\x1b[0m', 'Rebuilding original quote');
-                        // Now rebuild the original request, replacing the "FXP DFSP" by its original value, taken from the body
-                        const rebuiltRequest = { headers: {...ctx.request.headers}, body: {...ctx.request.body} };
-                        if (ctx.request.headers[FSPIOP_SourceHeader] == payerFspId && ctx.request.headers[FSPIOP_DestinationHeader] != payeeFspId) {
-                            rebuiltRequest.headers[FSPIOP_DestinationHeader] = payeeFspId;
-                        } else if (ctx.request.headers[FSPIOP_SourceHeader] != payerFspId && ctx.request.headers[FSPIOP_DestinationHeader] == payeeFspId) {
-                            rebuiltRequest.headers[FSPIOP_SourceHeader] = payerFspId;
-                        } else {
-                            const errorMessage = `Inbound FXP quote request failed JWS validation: expected either ${FSPIOP_SourceHeader} to be != payerFspId or ${FSPIOP_DestinationHeader} to be != payeeFspId ` +
-                            `but received: FSPIOP_SourceHeader = ${ctx.request.headers[FSPIOP_SourceHeader]}, payerFspId = ${payerFspId} and FSPIOP_DestinationHeader = ${ctx.request.headers[FSPIOP_DestinationHeader]}, payeeFspId = ${payeeFspId}`;
-                            inboundLogger.log(errorMessage);
-
-                            ctx.response.status = 400;
-                            ctx.response.body = new Errors.MojaloopFSPIOPError({error: 'Invalid FXP quote request'}, errorMessage, null,
-                                Errors.MojaloopApiErrorCodes.VALIDATION_ERROR).toApiErrorObject();
-                            return;
-                        }
-
                         // Validate the original request.
-                        console.log('\x1b[47m\x1b[30m%s\x1b[0m', 'Validating original quote');
                         jwsValidator.validate(rebuiltRequest, inboundLogger);
-
-                        console.log('\x1b[47m\x1b[30m%s\x1b[0m', 'FXP QUOTE received OK');                        
                     } else {
                         jwsValidator.validate(ctx.request, inboundLogger);
                     }
                 }
             }
             catch(err) {
-                inboundLogger.log(`Inbound request failed JWS validation: ${err.stack || util.inspect(err)}`);
+                inboundLogger.push({ err }).log('Inbound request failed JWS validation');
 
                 ctx.response.status = 400;
                 ctx.response.body = new Errors.MojaloopFSPIOPError(err, err.message, null,
@@ -302,17 +306,19 @@ const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
 
 
     // Handle requests
+    const inboundHandlers = conf.fxpModeEnabled ? require('./inboundApi/fxpHandlers.js') : require('./inboundApi/handlers.js');
+    
     inboundApi.use(router(inboundHandlers.map));
     inboundApi.use(async (ctx, next) => {
         // Override Koa's default behaviour of returning the status code as text in the body. If we
-        // haven't defined the body, we want it empty.
+        // haven't defined the body, we want it empty. Note that if setting this to null, Koa appears
+        // to override the status code with a 204. This is correct behaviour in the sense that the
+        // status code correctly corresponds to the content (none) but unfortunately the Mojaloop API
+        // does not respect this convention and requires a 200.
         if (ctx.response.body === undefined) {
-            ctx.response.body = null;
-            if (!ctx.response.status) {
-                ctx.response.status = 204;                
-            }
+            ctx.response.body = '';
         }
-        next(); // not sure        
+        return await next();
     });
     outboundApi.use(router(outboundHandlers.map));
 
