@@ -18,6 +18,9 @@ const MojaloopRequests = require('@modusbox/mojaloop-sdk-standard-components').M
 const Ilp = require('@modusbox/mojaloop-sdk-standard-components').Ilp;
 const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
 
+// const DomainEventLogger = require('../../events/DomainEventLogger');
+const DomainEventTypes = require('../../events/DomainEventTypes');
+
 const FSPIOP_SourceHeader = 'FSPIOP-Source'.toLowerCase();
 const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
 
@@ -59,6 +62,10 @@ class FxpInboundModel {
         });
     }
 
+    setDomainEventLogger(domainEventLogger) {
+        this.domainEventLogger = domainEventLogger;
+    }
+    
     /**
      * Creates and returns a MojaloopRequests client that can be used to send requests from sourceDfspId to destinationDfspId.
      * The new MojaloopRequests has the same logger, tls and jwsSign config than this.
@@ -93,6 +100,7 @@ class FxpInboundModel {
 
             // make a call to the backend to ask for a new quote
             this.logger.log('[Quotes 19] FXP QUOTE Sending request to backend');
+            this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_QUOTE_A_RECEIVED, originalQuoteRequest.transactionId, originalQuoteRequest);
             let secondStageComposedQuote;
             try {
                 secondStageComposedQuote = await this.fxpBackendRequests.postFxpQuotes(originalQuoteRequest, originalQuoteRequestHeaders);
@@ -108,6 +116,7 @@ class FxpInboundModel {
             }
 
             this.logger.log(`[Quotes 22] FXP QUOTE Got response from backend: ${JSON.stringify(secondStageComposedQuote, null, 2)}`);
+            this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_QUOTE_B_CREATED, originalQuoteRequest.transactionId, secondStageComposedQuote);
 
             // Now that we got a response, send the quote to the destination DFSP
             const secondStageQuoteSourceFsp = secondStageComposedQuote.metadata.sourceFSP;
@@ -119,7 +128,10 @@ class FxpInboundModel {
             // forward the quote to the destination FSP
             this.logger.log(`[Quotes 23] FXP QUOTE Sending second stage quote to destination DFSP: ${secondStageQuoteDestinationFsp}`);
 
-            return this.sendSecondStageQuoteToDestination(secondStageQuoteDestinationFsp, secondStageQuoteSourceFsp, secondStageComposedQuote);
+            let sendSecondStageQuoteResult= this.sendSecondStageQuoteToDestination(secondStageQuoteDestinationFsp, secondStageQuoteSourceFsp, secondStageComposedQuote);
+            this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_QUOTE_B_SENT, originalQuoteRequest.transactionId, secondStageComposedQuote);
+            return sendSecondStageQuoteResult;
+
         }
         catch(err) {
             this.logger.log(`Error in quoteRequest: ${err.stack || util.inspect(err)}`);
@@ -193,6 +205,7 @@ class FxpInboundModel {
         // clean quoteId from response if there. A previous version of the SDK returns it as part of a quote response but it's not part of it per the Mojaloop spec ( FIXME find proper reference )
         delete secondStageQuoteResponse['quoteId'];
         this.logger.log(`[Quotes 28B] Received response to second stage quote: ${util.inspect(secondStageQuoteResponse)} with headers: ${util.inspect(secondStageQuoteResponseHeaders)}`);
+        this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_QUOTE_B_RESPONSE_RECEIVED, originalQuoteRequest.transactionId, secondStageQuoteResponse);
         // stop listening for payee resolution messages
         this.subscriber.unsubscribe(secondStageQuoteId, () => {
             this.logger.log('FxpQuote request subscriber unsubscribed');
@@ -253,6 +266,7 @@ class FxpInboundModel {
 
         this.logger.log(`[Quotes 31, 32] FXP QUOTE : SENDING RESPONSE TO ORIGINAL QUOTE TO DFSP1 ${util.inspect(composedResponseToOriginalQuote)}`);
         // make a callback to the source fsp with the quote response
+        this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_QUOTE_A_RESPONSE_CREATED, originalQuoteRequest.transactionId, composedResponseToOriginalQuote);
 
         const fxpMojaloopRequests = this.createMojaloopRequestsClient(sourceFspId, destinationFspId);
 
@@ -262,6 +276,7 @@ class FxpInboundModel {
         // FIXME wrap in a trycatch
         const putResponse = await fxpMojaloopRequests.putQuotes(originalQuoteId, responseToOriginalQuote, destinationFspId);
         this.logger.log(`Response from original dfspid to PUT /quotes/{originalQuoteId}: ${util.inspect(putResponse)}`);
+        this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_QUOTE_A_RESPONSE_SENT, originalQuoteRequest.transactionId, composedResponseToOriginalQuote);
     }
 
     /**
@@ -308,6 +323,8 @@ class FxpInboundModel {
     async fxpTransfer(prepareRequest, prepareRequestSourceFspId, destinationFspId, quoteData) {
         this.logger.log(`[Transfers 03 A] FXP : received transfer ${util.inspect(prepareRequest)} from ${util.inspect(prepareRequestSourceFspId)} to ${util.inspect(destinationFspId)}`);
         this.logger.log('[Transfers 04 A] FXP : Forwarding to FXP');
+        this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_TRANSFER_A_RECEIVED, prepareRequest.transferId, prepareRequest);
+
         let composedSecondStageTransfer = await this.getFxpTransferFromBackend(prepareRequest, prepareRequestSourceFspId);
         let secondStageTransfer = composedSecondStageTransfer.transfer; // FIXME if null there was an error. OR, rethrow ex from getFxpTransferFromBackend ( better )
 
@@ -319,6 +336,7 @@ class FxpInboundModel {
         // FIXME assert that the value we received from the backend is the same as:
         secondStageTransfer.transferId = quoteData.secondStageQuote.transactionId;
         this.logger.log(`[Transfers 06] FXP : received second stage transfer from backend: ${util.inspect(secondStageTransfer)}`);
+        this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_TRANSFER_B_CREATED, prepareRequest.transferId, secondStageTransfer);
 
         // Set up a listener before forwarding the secondStageTransfer
         await this.createFxpTransferResponseListener(prepareRequest, prepareRequestSourceFspId, quoteData, composedSecondStageTransfer);
@@ -326,6 +344,7 @@ class FxpInboundModel {
         // forward it to destination fsp
         this.logger.log('[Transfers 07 B] FXP : Sending transfer to Payee DFSP');
         await this.forwardFxpTransferToDestination(composedSecondStageTransfer);
+        this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_TRANSFER_B_SENT, prepareRequest.transferId, secondStageTransfer);
     }
 
     /**
@@ -417,8 +436,10 @@ class FxpInboundModel {
             if (sourceFspId === quoteData.secondStageQuoteDestinationFsp && destinationFspId === quoteData.secondStageQuoteSourceFsp) {
                 // 14B
                 this.logger.log(`[Transfers 14B] FXP : received second stage transfer callback: ${util.inspect(secondStageTransferResponse)}`);
+                this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_TRANSFER_B_FULFILMENT_RECEIVED, prepareRequest.transferId, secondStageTransferResponse);
             } else {
                 console.error(`Coudln't find a match for sourceFspId: ${sourceFspId} destinationFspId: ${destinationFspId}`);
+                return;
             }
 
             // We got a response to the secondStageTransferRequest
@@ -432,11 +453,13 @@ class FxpInboundModel {
             //  }',
  
             this.logger.log('[Transfers 15 B] FXP : forward onto FXP');
+            this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_TRANSFER_B_PAYEE_TRANSFER_COMMITTED, prepareRequest.transferId, secondStageTransferResponse);
 
-            // ( FXP on receiving will perform 16[B] Commit payee transfer)
+            // ( FXP on receiving will perform 16[B] Commit payee transfer).
             await this.forwardFulfilmentToBackend(secondStageTransferResponse, prepareRequestSourceFspId, secondStageTransferId);
+            // FIXME check operation succeeded, forward error it it didn't and DON'T log a succesful commit
+            this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_TRANSFER_B_PAYEE_TRANSFER_COMMITTED_ACK, prepareRequest.transferId, secondStageTransferResponse);
 
-            // FIXME check operation succeeded, forward error it it didn't
 
             this.logger.log(`[Transfers 19 A] FXP : generate fulfilment for the original transfer ${util.inspect(prepareRequest)}`);
 
@@ -446,6 +469,9 @@ class FxpInboundModel {
                 transferState: 'COMMITTED',
                 fulfilment: quoteData.fulfilment
             };
+
+            this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_TRANSFER_A_FULFILMENT_CREATED, prepareRequest.transferId, transferFulfilment);
+
             this.logger.log(`[Transfers 20 A] FXP : respond with fulfilment: ${util.inspect(transferFulfilment)}`);
 
             // Send the fulfilment back to the originator DFSP
@@ -455,6 +481,7 @@ class FxpInboundModel {
             let sendFulfimentToOriginatorFspResponse = await this.sendFulfimentToOriginatorFsp(prepareRequest.transferId, transferFulfilment,
                 quoteData.originalQuoteDestinationFspId, quoteData.originalQuoteSourceFspId);
             this.logger.log(`[Transfers 20 A] FXP : 'sendFulfimentToOriginatorFsp response: ${util.inspect(sendFulfimentToOriginatorFspResponse)}`);
+            this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_TRANSFER_A_FULFILMENT_SENT, prepareRequest.transferId, transferFulfilment);
             // FIXME catch error and log. retry?
         };
         this.subscriber.on('message', secondStageTransferResponseHandler);
@@ -533,6 +560,7 @@ class FxpInboundModel {
                 this.logger.log(`[Transfers 22] FXP : received original transfer callback: ${util.inspect(originalTransferResponse)}`);
             } else {
                 console.error(`Coudln't find a match for sourceFspId: ${sourceFspId} destinationFspId: ${destinationFspId}`); // FIXME  not clear. Same on 14B
+                return;
             }
 
             // We got a response to the originalTransferRequest
@@ -545,8 +573,10 @@ class FxpInboundModel {
             //     "fulfilment":"AEHj7oqLNuVEL8W1xsxSpVFdncgqbiza_a-hNHS657o"
             //  }',
             this.logger.log('[Transfers 23] FXP : Log fulfilment has been commited and forward to FXP');
+            this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_TRANSFER_A_PAYER_TRANSFER_COMMITTED, prepareRequest.transferId, originalTransferResponse);
 
             await this.forwardFulfilmentToBackend(originalTransferResponse, prepareRequestSourceFspId, prepareRequest.transferId);
+            this.domainEventLogger.logDomainEvent(DomainEventTypes.FX_TRANSFER_A_PAYER_TRANSFER_COMMITTED_ACK, prepareRequest.transferId, originalTransferResponse);
 
             // we're done. Check the response, and forward errors if any
             

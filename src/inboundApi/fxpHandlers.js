@@ -15,8 +15,20 @@ const util = require('util');
 const FxpInboundModel = require('@internal/model').fxpInboundModel;
 const FxpBackendRequests = require('@internal/fxpRequests').FxpBackendRequests;
 
+
+// FIXME Should be configured "from outside", to avoid having a dependency from this fxpHandlers to the domainEvents classes
+const {DomainEventDBPersistence} = require('../events/persistence/DomainEventDBPersistence');
+const {DomainEventLogger} = require('../events/DomainEventLogger');
+let domainEventPersistence = new DomainEventDBPersistence();
+let domainEventLogger = new DomainEventLogger(domainEventPersistence);
+
 // Default factories
-let fxpInboundModelFactory = (options) => new FxpInboundModel(options);
+let fxpInboundModelFactory = (options) => { 
+    let fxpInboundModel = new FxpInboundModel(options);
+    fxpInboundModel.setDomainEventLogger(domainEventLogger);
+    return fxpInboundModel;
+};
+
 let fxpBackendRequestsFactory = (options) => new FxpBackendRequests(options);
 
 // Factory setters
