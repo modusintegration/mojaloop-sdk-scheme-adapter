@@ -5,12 +5,12 @@ RUN apk add --no-cache git
 
 EXPOSE 3000
 
-COPY ./secrets /secrets
+COPY ./secrets /
+
+WORKDIR /src/
 
 COPY ./src/ /src/
 
-COPY package.json .
-
-RUN npm install
+RUN npm install --production
 
 CMD ["node", "/src/index.js"]
