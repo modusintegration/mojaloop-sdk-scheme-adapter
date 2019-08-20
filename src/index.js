@@ -15,7 +15,7 @@ const {
     createOutboundLogger,
     createInboundLogger,
     loadConf,
-    createOutboundApi,
+    createOutboundApiMiddlewares,
     createInboundApiMiddlewares,
     createApiServers
 } = require('./app');
@@ -27,8 +27,8 @@ const outboundHandlers = require('./outboundApi/handlers.js');
 
     const inboundLogger = await createInboundLogger();
 
-    let inboundHandlersMap = inboundHandlers.map;
     const inboundApi = new Koa();
+    let inboundHandlersMap = inboundHandlers.map;
 
     const inboundMiddlewares = await createInboundApiMiddlewares(conf, inboundLogger, inboundHandlersMap);
     for (const middleware of inboundMiddlewares) {
@@ -37,8 +37,13 @@ const outboundHandlers = require('./outboundApi/handlers.js');
 
     const outboundLogger = await createOutboundLogger();
 
+    const outboundApi = new Koa();
     let outboundHandlersMap = outboundHandlers.map;
-    const outboundApi = await createOutboundApi(conf, outboundLogger, outboundHandlersMap);
+
+    const outboundMiddlewares = await createOutboundApiMiddlewares(conf, outboundLogger, outboundHandlersMap);
+    for (const middleware of outboundMiddlewares) {
+        outboundApi.use(middleware);
+    };
 
     createApiServers(conf, inboundApi, inboundLogger, outboundApi, outboundLogger);
 })().catch(err => {

@@ -11,7 +11,6 @@
 'use strict';
 require('dotenv').config();
 
-const Koa = require('koa');
 const koaBody = require('koa-body');
 const util = require('util');
 const coBody = require('co-body');
@@ -77,14 +76,24 @@ async function failSafe(ctx, next) {
 }
 
 /**
- * Creates a Koa API implementing the Outbound API
+ * Returns a list of middlewares to be used in a Koa API implementing the Outbound API
  * 
  * @param {Object} conf Config object. See config.js
  * @param {Log} outboundLogger Logger
  * @param {Map(string->{string:function(ctx)})} outboundHandlersMap maps path -> method to Koa handler function
+ * @returns {Array} list of KOA middlewares
  */
-async function createOutboundApi(conf, outboundLogger, outboundHandlersMap) {
+async function createOutboundApiMiddlewares(conf, outboundLogger, outboundHandlersMap) {
+    let middlewares = [];
+
     const space = Number(process.env.LOG_INDENT);
+
+    middlewares.push(failSafe);
+
+    // outbound always expects application/json
+    middlewares.push(koaBody());
+
+    // Add a cache, conf and log context for each request, log the receipt and handling thereof    
     const outboundCacheTransports = await Promise.all([Transports.consoleDir()]);
     const outboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-outboundCache' }, space, transports: outboundCacheTransports });
     const outboundCacheConfig = {
@@ -93,12 +102,8 @@ async function createOutboundApi(conf, outboundLogger, outboundHandlersMap) {
     };
     const outboundCache = new Cache(outboundCacheConfig);
     await outboundCache.connect();
-    const outboundApi = new Koa();
-    const outboundApiSpec = yaml.load('./outboundApi/api.yaml');
-    outboundApi.use(failSafe);
-    // outbound always expects application/json
-    outboundApi.use(koaBody());
-    outboundApi.use(async (ctx, next) => {
+
+    middlewares.push(async (ctx, next) => {
         ctx.state.cache = outboundCache;
         ctx.state.conf = conf;
         ctx.state.logger = outboundLogger.push({
@@ -117,10 +122,12 @@ async function createOutboundApi(conf, outboundLogger, outboundHandlersMap) {
         }
         ctx.state.logger.log('Request processed');
     });
+
     // Add validation for each outbound request
     const outboundValidator = new Validate();
+    const outboundApiSpec = yaml.load('./outboundApi/api.yaml');
     await outboundValidator.initialise(outboundApiSpec);
-    outboundApi.use(async (ctx, next) => {
+    middlewares.push(async (ctx, next) => {
         ctx.state.logger.log('Validating request');
         try {
             ctx.state.path = outboundValidator.validateRequest(ctx, ctx.state.logger);
@@ -136,8 +143,9 @@ async function createOutboundApi(conf, outboundLogger, outboundHandlersMap) {
             };
         }
     });
-    outboundApi.use(router(outboundHandlersMap));
-    return outboundApi;
+
+    middlewares.push(router(outboundHandlersMap));
+    return middlewares;
 }
 
 /**
@@ -343,7 +351,7 @@ module.exports = {
     createOutboundLogger,
     createInboundLogger,
     loadConf,
-    createOutboundApi,
+    createOutboundApiMiddlewares,
     createInboundApiMiddlewares,
     createApiServers
 }
