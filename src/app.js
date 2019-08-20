@@ -22,8 +22,6 @@ const yaml = require('yamljs');
 const randomPhrase = require('@internal/randomphrase');
 const Validate = require('@internal/validate');
 
-const inboundHandlers = require('./inboundApi/handlers.js');
-const outboundHandlers = require('./outboundApi/handlers.js');
 
 const router = require('@internal/router');
 const { setConfig, getConfig } = require('./config.js');
@@ -83,8 +81,9 @@ async function failSafe(ctx, next) {
  * 
  * @param {Object} conf Config object. See config.js
  * @param {Log} outboundLogger Logger
+ * @param {Map(string->{string:function(ctx)})} outboundHandlersMap maps path -> method to Koa handler function
  */
-async function createOutboundApi(conf, outboundLogger) {
+async function createOutboundApi(conf, outboundLogger, outboundHandlersMap) {
     const space = Number(process.env.LOG_INDENT);
     const outboundCacheTransports = await Promise.all([Transports.consoleDir()]);
     const outboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-outboundCache' }, space, transports: outboundCacheTransports });
@@ -137,7 +136,7 @@ async function createOutboundApi(conf, outboundLogger) {
             };
         }
     });
-    outboundApi.use(router(outboundHandlers.map));
+    outboundApi.use(router(outboundHandlersMap));
     return outboundApi;
 }
 
@@ -146,8 +145,9 @@ async function createOutboundApi(conf, outboundLogger) {
  * 
  * @param {Object} conf Config object. See config.js
  * @param {Log} outboundLogger Logger
+ * @param {Map(string->{string:function(ctx)})} inboundHandlersMap maps path -> method to Koa handler function
  */
-async function createInboundApi(conf, inboundLogger) {
+async function createInboundApi(conf, inboundLogger, inboundHandlersMap) {
     const space = Number(process.env.LOG_INDENT);
     const inboundCacheTransports = await Promise.all([Transports.consoleDir()]);
     const inboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-inboundCache' }, space, transports: inboundCacheTransports });
@@ -259,7 +259,7 @@ async function createInboundApi(conf, inboundLogger) {
         }
     });
     // Handle requests
-    inboundApi.use(router(inboundHandlers.map));
+    inboundApi.use(router(inboundHandlersMap));
     inboundApi.use(async (ctx, next) => {
         // Override Koa's default behaviour of returning the status code as text in the body. If we
         // haven't defined the body, we want it empty. Note that if setting this to null, Koa appears

@@ -18,17 +18,21 @@ const {
     createInboundApi,
     createApiServers
 } = require('./app');
+const inboundHandlers = require('./inboundApi/handlers.js');
+const outboundHandlers = require('./outboundApi/handlers.js');
 
 (async function() {
     const conf = await loadConf();
 
     const inboundLogger = await createInboundLogger();
 
-    const inboundApi = await createInboundApi(conf, inboundLogger);
+    let inboundHandlersMap = inboundHandlers.map;
+    const inboundApi = await createInboundApi(conf, inboundLogger, inboundHandlersMap);
 
     const outboundLogger = await createOutboundLogger();
 
-    const outboundApi = await createOutboundApi(conf, outboundLogger);
+    let outboundHandlersMap = outboundHandlers.map;
+    const outboundApi = await createOutboundApi(conf, outboundLogger, outboundHandlersMap);
 
     createApiServers(conf, inboundApi, inboundLogger, outboundApi, outboundLogger);
 })().catch(err => {
