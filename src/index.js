@@ -45,7 +45,17 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
     // Set up a logger for each running server
     const space = Number(process.env.LOG_INDENT);
 
-    // set up connection to cachc
+    // Log raw to console as a last resort
+    const failSafe = async (ctx, next) => {
+        try {
+            await next();
+        } catch (err) {
+            // TODO: return a 500 here if the response has not already been sent?
+            console.log(`Error caught in catchall: ${err.stack || util.inspect(err, { depth: 10 })}`);
+        }
+    };
+
+    // set up connection to cache
     const inboundCacheTransports = await Promise.all([Transports.consoleDir()]);
     const inboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-inboundCache' }, space, transports:inboundCacheTransports });
 
@@ -57,48 +67,19 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
     const inboundCache = new Cache(inboundCacheConfig);
     await inboundCache.connect();
 
-    const outboundCacheTransports = await Promise.all([Transports.consoleDir()]);
-    const outboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-outboundCache' }, space, transports:outboundCacheTransports });
-
-    const outboundCacheConfig = {
-        ...conf.cacheConfig,
-        logger: outboundCacheLogger
-    };
-
-    const outboundCache = new Cache(outboundCacheConfig);
-    await outboundCache.connect();
-
     const inboundTransports = await Promise.all([Transports.consoleDir()]);
     const inboundLogger = new Logger({ context: { app: 'mojaloop-sdk-inbound-api' }, space, transports:inboundTransports });
 
-    const outboundTransports = await Promise.all([Transports.consoleDir()]);
-    const outboundLogger = new Logger({ context: { app: 'mojaloop-sdk-outbound-api' }, space, transports:outboundTransports });
-
     const inboundApi = new Koa();
-    const outboundApi = new Koa();
-    
-    const inboundApiSpec = yaml.load('./inboundApi/api.yaml');
-    const outboundApiSpec = yaml.load('./outboundApi/api.yaml');
 
+    const inboundApiSpec = yaml.load('./inboundApi/api.yaml');
 
     const jwsValidator = new Jws.validator({
         logger: inboundLogger,
         validationKeys: conf.jwsVerificationKeys
     });
 
-
-    // Log raw to console as a last resort
-    const failSafe = async (ctx, next) => {
-        try {
-            await next();
-        } catch (err) {
-            // TODO: return a 500 here if the response has not already been sent?
-            console.log(`Error caught in catchall: ${err.stack || util.inspect(err, { depth: 10 })}`);
-        }
-    };
-
     inboundApi.use(failSafe);
-    outboundApi.use(failSafe);
 
     // tag each incoming request with a unique identifier
     inboundApi.use(async (ctx, next) => {
@@ -153,10 +134,6 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
         await next();
     });
 
-
-    // outbound always expects application/json
-    outboundApi.use(koaBody());
-
     // Add a log context for each request, log the receipt and handling thereof
     inboundApi.use(async (ctx, next) => {
         ctx.state.cache = inboundCache;
@@ -175,25 +152,9 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
         ctx.state.logger.log('Request processed');
     });
 
-    outboundApi.use(async (ctx, next) => {
-        ctx.state.cache = outboundCache;
-        ctx.state.conf = conf;
-        ctx.state.logger = outboundLogger.push({ request: {
-            id: randomPhrase(),
-            path: ctx.path,
-            method: ctx.method
-        }});
-        ctx.state.logger.log('Request received');
-        try {
-            await next();
-        } catch (err) {
-            ctx.state.logger.push(err).log('Error');
-        }
-        ctx.state.logger.log('Request processed');
-    });
-
     // Add validation for each inbound request
     const inboundValidator = new Validate();
+    await inboundValidator.initialise(inboundApiSpec);
 
     inboundApi.use(async (ctx, next) => {
         ctx.state.logger.log('Validating request');
@@ -222,9 +183,64 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
         }
     });
 
+    // Handle requests
+    inboundApi.use(router(inboundHandlers.map));
+    inboundApi.use(async (ctx, next) => {
+        // Override Koa's default behaviour of returning the status code as text in the body. If we
+        // haven't defined the body, we want it empty. Note that if setting this to null, Koa appears
+        // to override the status code with a 204. This is correct behaviour in the sense that the
+        // status code correctly corresponds to the content (none) but unfortunately the Mojaloop API
+        // does not respect this convention and requires a 200.
+        if (ctx.response.body === undefined) {
+            ctx.response.body = '';
+        }
+        return await next();
+    });
+
+    const outboundCacheTransports = await Promise.all([Transports.consoleDir()]);
+    const outboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-outboundCache' }, space, transports:outboundCacheTransports });
+
+    const outboundCacheConfig = {
+        ...conf.cacheConfig,
+        logger: outboundCacheLogger
+    };
+
+    const outboundCache = new Cache(outboundCacheConfig);
+    await outboundCache.connect();
+
+    const outboundTransports = await Promise.all([Transports.consoleDir()]);
+    const outboundLogger = new Logger({ context: { app: 'mojaloop-sdk-outbound-api' }, space, transports:outboundTransports });
+
+    const outboundApi = new Koa();
+    
+    const outboundApiSpec = yaml.load('./outboundApi/api.yaml');
+
+    outboundApi.use(failSafe);
+
+    // outbound always expects application/json
+    outboundApi.use(koaBody());
+
+    outboundApi.use(async (ctx, next) => {
+        ctx.state.cache = outboundCache;
+        ctx.state.conf = conf;
+        ctx.state.logger = outboundLogger.push({ request: {
+            id: randomPhrase(),
+            path: ctx.path,
+            method: ctx.method
+        }});
+        ctx.state.logger.log('Request received');
+        try {
+            await next();
+        } catch (err) {
+            ctx.state.logger.push(err).log('Error');
+        }
+        ctx.state.logger.log('Request processed');
+    });
+
 
     // Add validation for each outbound request
     const outboundValidator = new Validate();
+    await outboundValidator.initialise(outboundApiSpec);
 
     outboundApi.use(async (ctx, next) => {
         ctx.state.logger.log('Validating request');
@@ -242,33 +258,21 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
         }
     });
 
-
-    // Handle requests
-    inboundApi.use(router(inboundHandlers.map));
-    inboundApi.use(async (ctx, next) => {
-        // Override Koa's default behaviour of returning the status code as text in the body. If we
-        // haven't defined the body, we want it empty. Note that if setting this to null, Koa appears
-        // to override the status code with a 204. This is correct behaviour in the sense that the
-        // status code correctly corresponds to the content (none) but unfortunately the Mojaloop API
-        // does not respect this convention and requires a 200.
-        if (ctx.response.body === undefined) {
-            ctx.response.body = '';
-        }
-        return await next();
-    });
     outboundApi.use(router(outboundHandlers.map));
 
-    await Promise.all([
-        inboundValidator.initialise(inboundApiSpec),
-        outboundValidator.initialise(outboundApiSpec)
-    ]);
 
+    createApiServers(conf, inboundApi, inboundLogger, outboundApi, outboundLogger);
+})().catch(err => {
+    console.error(err);
+    process.exit(1);
+});
+
+function createApiServers(conf, inboundApi, inboundLogger, outboundApi, outboundLogger) {
+    let inboundServer;
+    let outboundServer;
     // If config specifies TLS, start an HTTPS server; otherwise HTTP
     const inboundPort = conf.inboundPort;
     const outboundPort = conf.outboundPort;
-
-    let inboundServer;
-    let outboundServer;
 
     if (conf.tls.mutualTLS.enabled) {
         const inboundHttpsOpts = {
@@ -277,19 +281,16 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
             rejectUnauthorized: true // no effect if requestCert is not true
         };
         inboundServer = https.createServer(inboundHttpsOpts, inboundApi.callback()).listen(inboundPort);
-    } else {
+    }
+    else {
         inboundServer = http.createServer(inboundApi.callback()).listen(inboundPort);
     }
-
     inboundLogger.log(`Serving inbound API on port ${inboundPort}`);
-
     outboundServer = http.createServer(outboundApi.callback()).listen(outboundPort);
     outboundLogger.log(`Serving outbound API on port ${outboundPort}`);
-
     // handle SIGTERM to exit gracefully
     process.on('SIGTERM', async () => {
         console.log('SIGTERM received. Shutting down APIs...');
-
         await Promise.all([(() => {
             return new Promise(resolve => {
                 inboundServer.close(() => {
@@ -305,10 +306,7 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
                 });
             });
         })()]);
-
         process.exit(0);
     });
-})().catch(err => {
-    console.error(err);
-    process.exit(1);
-});
+}
+
