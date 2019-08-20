@@ -45,48 +45,114 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
     // Set up a logger for each running server
     const space = Number(process.env.LOG_INDENT);
 
-    // Log raw to console as a last resort
-    const failSafe = async (ctx, next) => {
-        try {
-            await next();
-        } catch (err) {
-            // TODO: return a 500 here if the response has not already been sent?
-            console.log(`Error caught in catchall: ${err.stack || util.inspect(err, { depth: 10 })}`);
-        }
-    };
+    const inboundTransports = await Promise.all([Transports.consoleDir()]);
+    const inboundLogger = new Logger({ context: { app: 'mojaloop-sdk-inbound-api' }, space, transports:inboundTransports });
+
 
     // set up connection to cache
-    const inboundCacheTransports = await Promise.all([Transports.consoleDir()]);
-    const inboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-inboundCache' }, space, transports:inboundCacheTransports });
+    const inboundApi = await createInboundApi(space, conf, inboundLogger);
 
+    const outboundTransports = await Promise.all([Transports.consoleDir()]);
+    const outboundLogger = new Logger({ context: { app: 'mojaloop-sdk-outbound-api' }, space, transports:outboundTransports });
+
+
+    const outboundApi = await createOutboundApi(space, conf, outboundLogger);
+
+
+    createApiServers(conf, inboundApi, inboundLogger, outboundApi, outboundLogger);
+})().catch(err => {
+    console.error(err);
+    process.exit(1);
+});
+
+
+    // Log raw to console as a last resort
+async function failSafe(ctx, next) {
+    try {
+        await next();
+    } catch (err) {
+        // TODO: return a 500 here if the response has not already been sent?
+        console.log(`Error caught in catchall: ${err.stack || util.inspect(err, { depth: 10 })}`);
+    }
+}
+
+async function createOutboundApi(space, conf, outboundLogger) {
+    const outboundCacheTransports = await Promise.all([Transports.consoleDir()]);
+    const outboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-outboundCache' }, space, transports: outboundCacheTransports });
+    const outboundCacheConfig = {
+        ...conf.cacheConfig,
+        logger: outboundCacheLogger
+    };
+    const outboundCache = new Cache(outboundCacheConfig);
+    await outboundCache.connect();
+    const outboundApi = new Koa();
+    const outboundApiSpec = yaml.load('./outboundApi/api.yaml');
+    outboundApi.use(failSafe);
+    // outbound always expects application/json
+    outboundApi.use(koaBody());
+    outboundApi.use(async (ctx, next) => {
+        ctx.state.cache = outboundCache;
+        ctx.state.conf = conf;
+        ctx.state.logger = outboundLogger.push({
+        request: {
+            id: randomPhrase(),
+            path: ctx.path,
+            method: ctx.method
+        }
+        });
+        ctx.state.logger.log('Request received');
+        try {
+            await next();
+        }
+        catch (err) {
+            ctx.state.logger.push(err).log('Error');
+        }
+        ctx.state.logger.log('Request processed');
+    });
+    // Add validation for each outbound request
+    const outboundValidator = new Validate();
+    await outboundValidator.initialise(outboundApiSpec);
+    outboundApi.use(async (ctx, next) => {
+        ctx.state.logger.log('Validating request');
+        try {
+            ctx.state.path = outboundValidator.validateRequest(ctx, ctx.state.logger);
+            ctx.state.logger.log('Request passed validation');
+            await next();
+        }
+        catch (err) {
+            ctx.state.logger.push({ err }).log('Request failed validation.');
+            ctx.response.status = 400;
+            ctx.response.body = {
+                message: err.message,
+                statusCode: 400
+            };
+        }
+    });
+    outboundApi.use(router(outboundHandlers.map));
+    return outboundApi;
+}
+
+async function createInboundApi(space, conf, inboundLogger) {
+    const inboundCacheTransports = await Promise.all([Transports.consoleDir()]);
+    const inboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-inboundCache' }, space, transports: inboundCacheTransports });
     const inboundCacheConfig = {
         ...conf.cacheConfig,
         logger: inboundCacheLogger
     };
-
     const inboundCache = new Cache(inboundCacheConfig);
     await inboundCache.connect();
-
-    const inboundTransports = await Promise.all([Transports.consoleDir()]);
-    const inboundLogger = new Logger({ context: { app: 'mojaloop-sdk-inbound-api' }, space, transports:inboundTransports });
-
     const inboundApi = new Koa();
-
     const inboundApiSpec = yaml.load('./inboundApi/api.yaml');
-
     const jwsValidator = new Jws.validator({
         logger: inboundLogger,
         validationKeys: conf.jwsVerificationKeys
     });
-
     inboundApi.use(failSafe);
-
     // tag each incoming request with a unique identifier
     inboundApi.use(async (ctx, next) => {
         ctx.request.id = randomPhrase();
         await next();
     });
-
     // Deal with mojaloop API content type headers...
     // treat as JSON
     inboundApi.use(async (ctx, next) => {
@@ -101,78 +167,72 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
             try {
                 ctx.request.body = await coBody.json(ctx.req);
             }
-            catch(err) {
+            catch (err) {
                 // error parsing body
                 inboundLogger.push({ err }).log('Error parsing body');
                 ctx.response.status = 400;
-                ctx.response.body = new Errors.MojaloopFSPIOPError(err, err.message, null,
-                    Errors.MojaloopApiErrorCodes.MALFORMED_SYNTAX).toApiErrorObject();
+                ctx.response.body = new Errors.MojaloopFSPIOPError(err, err.message, null, Errors.MojaloopApiErrorCodes.MALFORMED_SYNTAX).toApiErrorObject();
                 return;
             }
         }
         await next();
     });
-
-
     // JWS validation for incoming requests
     inboundApi.use(async (ctx, next) => {
-        if(conf.validateInboundJws) {
+        if (conf.validateInboundJws) {
             try {
-                if(ctx.request.method !== 'GET') {
+                if (ctx.request.method !== 'GET') {
                     jwsValidator.validate(ctx.request, inboundLogger);
                 }
             }
-            catch(err) {
+            catch (err) {
                 inboundLogger.push({ err }).log('Inbound request failed JWS validation');
-
                 ctx.response.status = 400;
-                ctx.response.body = new Errors.MojaloopFSPIOPError(err, err.message, null,
-                    Errors.MojaloopApiErrorCodes.INVALID_SIGNATURE).toApiErrorObject();
+                ctx.response.body = new Errors.MojaloopFSPIOPError(err, err.message, null, Errors.MojaloopApiErrorCodes.INVALID_SIGNATURE).toApiErrorObject();
                 return;
             }
         }
         await next();
     });
-
     // Add a log context for each request, log the receipt and handling thereof
     inboundApi.use(async (ctx, next) => {
         ctx.state.cache = inboundCache;
         ctx.state.conf = conf;
-        ctx.state.logger = inboundLogger.push({ request: {
+        ctx.state.logger = inboundLogger.push({
+        request: {
             id: ctx.request.id,
             path: ctx.path,
             method: ctx.method
-        }});
+        }
+        });
         ctx.state.logger.push({ body: ctx.request.body }).log('Request received');
         try {
             await next();
-        } catch (err) {
+        }
+        catch (err) {
             ctx.state.logger.push(err).log('Error');
         }
         ctx.state.logger.log('Request processed');
     });
-
     // Add validation for each inbound request
     const inboundValidator = new Validate();
     await inboundValidator.initialise(inboundApiSpec);
-
     inboundApi.use(async (ctx, next) => {
         ctx.state.logger.log('Validating request');
         try {
             ctx.state.path = inboundValidator.validateRequest(ctx, ctx.state.logger);
             ctx.state.logger.log('Request passed validation');
             await next();
-        } catch (err) {
+        }
+        catch (err) {
             ctx.state.logger.push({ err }).log('Request failed validation.');
             // send a mojaloop spec error response
             ctx.response.status = err.httpStatusCode || 400;
-
-            if(err instanceof Errors.MojaloopFSPIOPError) {
+            if (err instanceof Errors.MojaloopFSPIOPError) {
                 // this is a specific mojaloop spec error
                 ctx.response.body = err.toApiErrorObject();
                 return;
             }
-
             //generic mojaloop spec validation error
             ctx.response.body = {
                 errorInformation: {
@@ -182,7 +242,6 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
             };
         }
     });
-
     // Handle requests
     inboundApi.use(router(inboundHandlers.map));
     inboundApi.use(async (ctx, next) => {
@@ -196,76 +255,8 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
         }
         return await next();
     });
-
-    const outboundCacheTransports = await Promise.all([Transports.consoleDir()]);
-    const outboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-outboundCache' }, space, transports:outboundCacheTransports });
-
-    const outboundCacheConfig = {
-        ...conf.cacheConfig,
-        logger: outboundCacheLogger
-    };
-
-    const outboundCache = new Cache(outboundCacheConfig);
-    await outboundCache.connect();
-
-    const outboundTransports = await Promise.all([Transports.consoleDir()]);
-    const outboundLogger = new Logger({ context: { app: 'mojaloop-sdk-outbound-api' }, space, transports:outboundTransports });
-
-    const outboundApi = new Koa();
-    
-    const outboundApiSpec = yaml.load('./outboundApi/api.yaml');
-
-    outboundApi.use(failSafe);
-
-    // outbound always expects application/json
-    outboundApi.use(koaBody());
-
-    outboundApi.use(async (ctx, next) => {
-        ctx.state.cache = outboundCache;
-        ctx.state.conf = conf;
-        ctx.state.logger = outboundLogger.push({ request: {
-            id: randomPhrase(),
-            path: ctx.path,
-            method: ctx.method
-        }});
-        ctx.state.logger.log('Request received');
-        try {
-            await next();
-        } catch (err) {
-            ctx.state.logger.push(err).log('Error');
-        }
-        ctx.state.logger.log('Request processed');
-    });
-
-
-    // Add validation for each outbound request
-    const outboundValidator = new Validate();
-    await outboundValidator.initialise(outboundApiSpec);
-
-    outboundApi.use(async (ctx, next) => {
-        ctx.state.logger.log('Validating request');
-        try {
-            ctx.state.path = outboundValidator.validateRequest(ctx, ctx.state.logger);
-            ctx.state.logger.log('Request passed validation');
-            await next();
-        } catch (err) {
-            ctx.state.logger.push({ err }).log('Request failed validation.');
-            ctx.response.status = 400;
-            ctx.response.body = {
-                message: err.message,
-                statusCode: 400
-            };
-        }
-    });
-
-    outboundApi.use(router(outboundHandlers.map));
-
-
-    createApiServers(conf, inboundApi, inboundLogger, outboundApi, outboundLogger);
-})().catch(err => {
-    console.error(err);
-    process.exit(1);
-});
+    return inboundApi;
+}
 
 function createApiServers(conf, inboundApi, inboundLogger, outboundApi, outboundLogger) {
     let inboundServer;
