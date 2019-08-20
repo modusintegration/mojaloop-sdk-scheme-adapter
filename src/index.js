@@ -22,15 +22,13 @@ const {
 (async function() {
     const conf = await loadConf();
 
-    const space = Number(process.env.LOG_INDENT);
+    const inboundLogger = await createInboundLogger();
 
-    const inboundLogger = await createInboundLogger(space);
+    const inboundApi = await createInboundApi(conf, inboundLogger);
 
-    const inboundApi = await createInboundApi(space, conf, inboundLogger);
+    const outboundLogger = await createOutboundLogger();
 
-    const outboundLogger = await createOutboundLogger(space);
-
-    const outboundApi = await createOutboundApi(space, conf, outboundLogger);
+    const outboundApi = await createOutboundApi(conf, outboundLogger);
 
     createApiServers(conf, inboundApi, inboundLogger, outboundApi, outboundLogger);
 })().catch(err => {

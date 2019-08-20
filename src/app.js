@@ -34,13 +34,15 @@ const Cache = require('@internal/cache');
 const Jws = require('@modusbox/mojaloop-sdk-standard-components').Jws;
 const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
 
-async function createOutboundLogger(space) {
+async function createOutboundLogger() {
+    const space = Number(process.env.LOG_INDENT);
     const outboundTransports = await Promise.all([Transports.consoleDir()]);
     const outboundLogger = new Logger({ context: { app: 'mojaloop-sdk-outbound-api' }, space, transports: outboundTransports });
     return outboundLogger;
 }
 
-async function createInboundLogger(space) {
+async function createInboundLogger() {
+    const space = Number(process.env.LOG_INDENT);
     const inboundTransports = await Promise.all([Transports.consoleDir()]);
     const inboundLogger = new Logger({ context: { app: 'mojaloop-sdk-inbound-api' }, space, transports: inboundTransports });
     return inboundLogger;
@@ -63,7 +65,8 @@ async function failSafe(ctx, next) {
     }
 }
 
-async function createOutboundApi(space, conf, outboundLogger) {
+async function createOutboundApi(conf, outboundLogger) {
+    const space = Number(process.env.LOG_INDENT);
     const outboundCacheTransports = await Promise.all([Transports.consoleDir()]);
     const outboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-outboundCache' }, space, transports: outboundCacheTransports });
     const outboundCacheConfig = {
@@ -119,7 +122,8 @@ async function createOutboundApi(space, conf, outboundLogger) {
     return outboundApi;
 }
 
-async function createInboundApi(space, conf, inboundLogger) {
+async function createInboundApi(conf, inboundLogger) {
+    const space = Number(process.env.LOG_INDENT);
     const inboundCacheTransports = await Promise.all([Transports.consoleDir()]);
     const inboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-inboundCache' }, space, transports: inboundCacheTransports });
     const inboundCacheConfig = {
