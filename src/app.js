@@ -197,7 +197,7 @@ async function createInboundApiMiddlewares(conf, inboundLogger, inboundHandlersM
     });
 
     // JWS validation for incoming requests
-    const jwsValidator = new Jws.validator({
+    const jwsValidator = conf.jwsValidator || new Jws.validator({
         logger: inboundLogger,
         validationKeys: conf.jwsVerificationKeys
     });
