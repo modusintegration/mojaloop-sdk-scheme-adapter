@@ -99,7 +99,7 @@ class BackendRequests {
             return await request(reqOpts).then(throwOrJson);
         }
         catch (e) {
-            this.logger.push({ url, reqOpts, e }).log('Error attempting HTTP GET');
+            this.logger.push({ e }).log('Error attempting HTTP GET');
             throw e;
         }
     }
@@ -120,7 +120,7 @@ class BackendRequests {
             return await request(reqOpts).then(throwOrJson);
         }
         catch (e) {
-            this.logger.push({ url, reqOpts, e }).log('Error attempting HTTP PUT');
+            this.logger.push({ e }).log('Error attempting HTTP PUT');
             throw e;
         }
     }
@@ -141,7 +141,7 @@ class BackendRequests {
             return await request(reqOpts).then(throwOrJson);
         }
         catch (e) {
-            this.logger.push({ url, reqOpts, e }).log('Error attempting POST.');
+            this.logger.push({ e }).log('Error attempting POST.');
             throw e;
         }
     }

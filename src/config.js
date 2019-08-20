@@ -141,6 +141,8 @@ const setConfig = async cfg => {
     config.forwardPutQuotesToBackend = cfg.FORWARD_PUT_QUOTES_TO_BACKEND && cfg.FORWARD_PUT_QUOTES_TO_BACKEND.toLowerCase() === 'true' ? true : false;
     config.forwardPutTransfersToBackend = cfg.FORWARD_PUT_TRANSFERS_TO_BACKEND && cfg.FORWARD_PUT_TRANSFERS_TO_BACKEND.toLowerCase() === 'true' ? true : false;
     config.enableTestFeatures = cfg.ENABLE_TEST_FEATURES && cfg.ENABLE_TEST_FEATURES.toLowerCase() === 'true' ? true : false;
+
+    config.wso2BearerToken = cfg.WS02_BEARER_TOKEN;
 };
 
 
