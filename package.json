@@ -1,5 +1,5 @@
 {
-  "name": "mojaloop-dfsp-sdk-scheme-adapter",
+  "name": "mojaloop-sdk-scheme-adapter",
   "version": "0.0.1",
   "description": "An adapter for connecting to Mojaloop API enabled switches",
   "main": "src/index.js",
