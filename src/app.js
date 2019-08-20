@@ -34,6 +34,9 @@ const Cache = require('@internal/cache');
 const Jws = require('@modusbox/mojaloop-sdk-standard-components').Jws;
 const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
 
+/**
+ * Returns a new logger to be used for the outbound flow
+ */
 async function createOutboundLogger() {
     const space = Number(process.env.LOG_INDENT);
     const outboundTransports = await Promise.all([Transports.consoleDir()]);
@@ -41,6 +44,9 @@ async function createOutboundLogger() {
     return outboundLogger;
 }
 
+/**
+ * Returns a new logger to be used for the inbound flow
+ */
 async function createInboundLogger() {
     const space = Number(process.env.LOG_INDENT);
     const inboundTransports = await Promise.all([Transports.consoleDir()]);
@@ -48,6 +54,9 @@ async function createInboundLogger() {
     return inboundLogger;
 }
 
+/**
+ * Loads config from process.env, parses it and returns a conf object
+ */
 async function loadConf() {
     await setConfig(process.env);
     const conf = getConfig();
@@ -55,7 +64,11 @@ async function loadConf() {
     return conf;
 }
 
-    // Log raw to console as a last resort
+/**
+ * A middleware that logs raw to console as a last resort
+ * @param {Object} ctx Koa ctx
+ * @param {function} next Koa next function
+ */
 async function failSafe(ctx, next) {
     try {
         await next();
@@ -65,6 +78,12 @@ async function failSafe(ctx, next) {
     }
 }
 
+/**
+ * Creates a Koa API implementing the Outbound API
+ * 
+ * @param {Object} conf Config object. See config.js
+ * @param {Log} outboundLogger Logger
+ */
 async function createOutboundApi(conf, outboundLogger) {
     const space = Number(process.env.LOG_INDENT);
     const outboundCacheTransports = await Promise.all([Transports.consoleDir()]);
@@ -122,6 +141,12 @@ async function createOutboundApi(conf, outboundLogger) {
     return outboundApi;
 }
 
+/**
+ * Creates a Koa API implementing the Inbound API ( Mojaloop API )
+ * 
+ * @param {Object} conf Config object. See config.js
+ * @param {Log} outboundLogger Logger
+ */
 async function createInboundApi(conf, inboundLogger) {
     const space = Number(process.env.LOG_INDENT);
     const inboundCacheTransports = await Promise.all([Transports.consoleDir()]);
@@ -249,6 +274,15 @@ async function createInboundApi(conf, inboundLogger) {
     return inboundApi;
 }
 
+/**
+ * Creates a server for the inbound API and a server for the outbound API, using the parameters specified in the conf object ( ports etc )
+ * 
+ * @param {Object} conf Config. See ./config.js
+ * @param {Koa} inboundApi Inbound Koa API
+ * @param {Log} inboundLogger logger to be used in the inbound flow
+ * @param {Koa} outboundApi Outbound Koa API
+ * @param {Log} outboundLogger logger to be used in the outbound flow
+ */
 function createApiServers(conf, inboundApi, inboundLogger, outboundApi, outboundLogger) {
     let inboundServer;
     let outboundServer;
