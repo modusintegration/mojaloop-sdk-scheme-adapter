@@ -9,7 +9,7 @@
  **************************************************************************/
 
 'use strict';
-
+require('dotenv').config();
 
 const Koa = require('koa');
 const koaBody = require('koa-body');
@@ -30,12 +30,6 @@ const { setConfig, getConfig } = require('./config.js');
 const { Logger, Transports } = require('@internal/log');
 
 const Cache = require('@internal/cache');
-
-const inboundApi = new Koa();
-const outboundApi = new Koa();
-
-const inboundApiSpec = yaml.load('./inboundApi/api.yaml');
-const outboundApiSpec = yaml.load('./outboundApi/api.yaml');
 
 const Jws = require('@modusbox/mojaloop-sdk-standard-components').Jws;
 const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
@@ -79,6 +73,13 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
 
     const outboundTransports = await Promise.all([Transports.consoleDir()]);
     const outboundLogger = new Logger({ context: { app: 'mojaloop-sdk-outbound-api' }, space, transports:outboundTransports });
+
+    const inboundApi = new Koa();
+    const outboundApi = new Koa();
+    
+    const inboundApiSpec = yaml.load('./inboundApi/api.yaml');
+    const outboundApiSpec = yaml.load('./outboundApi/api.yaml');
+
 
     const jwsValidator = new Jws.validator({
         logger: inboundLogger,
