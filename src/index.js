@@ -9,13 +9,14 @@
  **************************************************************************/
 
 'use strict';
+const Koa = require('koa');
 
 const {
     createOutboundLogger,
     createInboundLogger,
     loadConf,
     createOutboundApi,
-    createInboundApi,
+    createInboundApiMiddlewares,
     createApiServers
 } = require('./app');
 const inboundHandlers = require('./inboundApi/handlers.js');
@@ -27,7 +28,12 @@ const outboundHandlers = require('./outboundApi/handlers.js');
     const inboundLogger = await createInboundLogger();
 
     let inboundHandlersMap = inboundHandlers.map;
-    const inboundApi = await createInboundApi(conf, inboundLogger, inboundHandlersMap);
+    const inboundApi = new Koa();
+
+    const inboundMiddlewares = await createInboundApiMiddlewares(conf, inboundLogger, inboundHandlersMap);
+    for (const middleware of inboundMiddlewares) {
+        inboundApi.use(middleware);
+    };
 
     const outboundLogger = await createOutboundLogger();
 

@@ -141,37 +141,31 @@ async function createOutboundApi(conf, outboundLogger, outboundHandlersMap) {
 }
 
 /**
- * Creates a Koa API implementing the Inbound API ( Mojaloop API )
+ * Returns a list of middlewares to be used in a Koa API implementing the Inbound API ( Mojaloop API )
  * 
  * @param {Object} conf Config object. See config.js
  * @param {Log} outboundLogger Logger
  * @param {Map(string->{string:function(ctx)})} inboundHandlersMap maps path -> method to Koa handler function
+ * @returns {Array} list of KOA middlewares
  */
-async function createInboundApi(conf, inboundLogger, inboundHandlersMap) {
+async function createInboundApiMiddlewares(conf, inboundLogger, inboundHandlersMap) {
+
+    let middlewares = [];
+
     const space = Number(process.env.LOG_INDENT);
-    const inboundCacheTransports = await Promise.all([Transports.consoleDir()]);
-    const inboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-inboundCache' }, space, transports: inboundCacheTransports });
-    const inboundCacheConfig = {
-        ...conf.cacheConfig,
-        logger: inboundCacheLogger
-    };
-    const inboundCache = new Cache(inboundCacheConfig);
-    await inboundCache.connect();
-    const inboundApi = new Koa();
-    const inboundApiSpec = yaml.load('./inboundApi/api.yaml');
-    const jwsValidator = new Jws.validator({
-        logger: inboundLogger,
-        validationKeys: conf.jwsVerificationKeys
-    });
-    inboundApi.use(failSafe);
+
+    // A middleware that logs raw to console as a last resort
+    middlewares.push(failSafe);
+
     // tag each incoming request with a unique identifier
-    inboundApi.use(async (ctx, next) => {
+    middlewares.push(async (ctx, next) => {
         ctx.request.id = randomPhrase();
         await next();
     });
+
     // Deal with mojaloop API content type headers...
     // treat as JSON
-    inboundApi.use(async (ctx, next) => {
+    middlewares.push(async (ctx, next) => {
         const validHeaders = new Set([
             'application/vnd.interoperability.parties+json;version=1.0',
             'application/vnd.interoperability.participants+json;version=1.0',
@@ -193,8 +187,13 @@ async function createInboundApi(conf, inboundLogger, inboundHandlersMap) {
         }
         await next();
     });
+
     // JWS validation for incoming requests
-    inboundApi.use(async (ctx, next) => {
+    const jwsValidator = new Jws.validator({
+        logger: inboundLogger,
+        validationKeys: conf.jwsVerificationKeys
+    });
+    middlewares.push(async (ctx, next) => {
         if (conf.validateInboundJws) {
             try {
                 if (ctx.request.method !== 'GET') {
@@ -210,8 +209,18 @@ async function createInboundApi(conf, inboundLogger, inboundHandlersMap) {
         }
         await next();
     });
-    // Add a log context for each request, log the receipt and handling thereof
-    inboundApi.use(async (ctx, next) => {
+
+    // Add a cache, conf and log context for each request, log the receipt and handling thereof
+    const inboundCacheTransports = await Promise.all([Transports.consoleDir()]);
+    const inboundCacheLogger = new Logger({ context: { app: 'mojaloop-sdk-inboundCache' }, space, transports: inboundCacheTransports });
+    const inboundCacheConfig = {
+        ...conf.cacheConfig,
+        logger: inboundCacheLogger
+    };
+    const inboundCache = new Cache(inboundCacheConfig);
+    await inboundCache.connect();
+
+    middlewares.push(async (ctx, next) => {
         ctx.state.cache = inboundCache;
         ctx.state.conf = conf;
         ctx.state.logger = inboundLogger.push({
@@ -230,10 +239,12 @@ async function createInboundApi(conf, inboundLogger, inboundHandlersMap) {
         }
         ctx.state.logger.log('Request processed');
     });
+
     // Add validation for each inbound request
     const inboundValidator = new Validate();
+    const inboundApiSpec = yaml.load('./inboundApi/api.yaml');
     await inboundValidator.initialise(inboundApiSpec);
-    inboundApi.use(async (ctx, next) => {
+    middlewares.push(async (ctx, next) => {
         ctx.state.logger.log('Validating request');
         try {
             ctx.state.path = inboundValidator.validateRequest(ctx, ctx.state.logger);
@@ -258,9 +269,11 @@ async function createInboundApi(conf, inboundLogger, inboundHandlersMap) {
             };
         }
     });
+
     // Handle requests
-    inboundApi.use(router(inboundHandlersMap));
-    inboundApi.use(async (ctx, next) => {
+    middlewares.push(router(inboundHandlersMap));
+
+    middlewares.push(async (ctx, next) => {
         // Override Koa's default behaviour of returning the status code as text in the body. If we
         // haven't defined the body, we want it empty. Note that if setting this to null, Koa appears
         // to override the status code with a 204. This is correct behaviour in the sense that the
@@ -271,7 +284,7 @@ async function createInboundApi(conf, inboundLogger, inboundHandlersMap) {
         }
         return await next();
     });
-    return inboundApi;
+    return middlewares;
 }
 
 /**
@@ -331,6 +344,6 @@ module.exports = {
     createInboundLogger,
     loadConf,
     createOutboundApi,
-    createInboundApi,
+    createInboundApiMiddlewares,
     createApiServers
 }
