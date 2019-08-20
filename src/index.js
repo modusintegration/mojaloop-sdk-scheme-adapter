@@ -36,28 +36,17 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
 
 
 (async function() {
-    // Set up the config from the environment
-    await setConfig(process.env);
-    const conf = getConfig();
+    const conf = await loadConf();
 
-    console.log(`Config loaded: ${util.inspect(conf, { depth: 10 })}`);
-
-    // Set up a logger for each running server
     const space = Number(process.env.LOG_INDENT);
 
-    const inboundTransports = await Promise.all([Transports.consoleDir()]);
-    const inboundLogger = new Logger({ context: { app: 'mojaloop-sdk-inbound-api' }, space, transports:inboundTransports });
+    const inboundLogger = await createInboundLogger(space);
 
-
-    // set up connection to cache
     const inboundApi = await createInboundApi(space, conf, inboundLogger);
 
-    const outboundTransports = await Promise.all([Transports.consoleDir()]);
-    const outboundLogger = new Logger({ context: { app: 'mojaloop-sdk-outbound-api' }, space, transports:outboundTransports });
-
+    const outboundLogger = await createOutboundLogger(space);
 
     const outboundApi = await createOutboundApi(space, conf, outboundLogger);
-
 
     createApiServers(conf, inboundApi, inboundLogger, outboundApi, outboundLogger);
 })().catch(err => {
@@ -65,6 +54,25 @@ const Errors = require('@modusbox/mojaloop-sdk-standard-components').Errors;
     process.exit(1);
 });
 
+
+async function createOutboundLogger(space) {
+    const outboundTransports = await Promise.all([Transports.consoleDir()]);
+    const outboundLogger = new Logger({ context: { app: 'mojaloop-sdk-outbound-api' }, space, transports: outboundTransports });
+    return outboundLogger;
+}
+
+async function createInboundLogger(space) {
+    const inboundTransports = await Promise.all([Transports.consoleDir()]);
+    const inboundLogger = new Logger({ context: { app: 'mojaloop-sdk-inbound-api' }, space, transports: inboundTransports });
+    return inboundLogger;
+}
+
+async function loadConf() {
+    await setConfig(process.env);
+    const conf = getConfig();
+    console.log(`Config loaded: ${util.inspect(conf, { depth: 10 })}`);
+    return conf;
+}
 
     // Log raw to console as a last resort
 async function failSafe(ctx, next) {
