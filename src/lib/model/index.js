@@ -13,10 +13,9 @@
 
 const inboundTransfersModel = require('./inboundModel.js');
 const outboundTransfersModel = require('./outboundModel.js');
-const fxpInboundModel = require('./fxpInboundModel.js');
+
 
 module.exports = {
     inboundTransfersModel: inboundTransfersModel,
-    outboundTransfersModel: outboundTransfersModel,
-    fxpInboundModel: fxpInboundModel
+    outboundTransfersModel: outboundTransfersModel
 };

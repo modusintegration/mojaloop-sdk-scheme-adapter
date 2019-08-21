@@ -16,7 +16,6 @@
   ],
   "dependencies": {
     "@internal/requests": "file:lib/requests",
-    "@internal/fxpRequests": "file:lib/fxpRequests",
     "@internal/shared": "file:lib/shared",
     "javascript-state-machine": "^3.1.0"
   }
