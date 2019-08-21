@@ -1,7 +1,7 @@
 {
   "name": "mojaloop-sdk-scheme-adapter",
   "version": "0.0.1",
-  "description": "An adapter for connecting to Mojaloop API enabled switches - This is an empty dependencies package.json to be able to import via github",
+  "description": "An adapter for connecting to Mojaloop API enabled switches - This package.json doesn't have any 'file:' dependencies to be able to import via github",
   "author": "Matt Kingston, James Bush, ModusBox Inc.",
   "license": "Apache-2.0",
   "licenses": [
@@ -11,6 +11,14 @@
     }
   ],
   "dependencies": {
+    "redis": "^2.8.0",
+    "sqlite": "^3.0.1",
+    "request": "^2.34",
+    "request-promise-native": "^1.0.7",
+    "javascript-state-machine": "^3.1.0",
+    "ajv": "^6.7.0",
+    "json-schema-ref-parser": "^6.0.3",
+    "openapi-jsonschema-parameters": "^1.1.0"
   },
   "devDependencies": {
   }
