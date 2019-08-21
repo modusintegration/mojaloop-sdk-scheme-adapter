@@ -45,10 +45,18 @@ const FSPIOP_DestinationCurrencyHeader = 'FSPIOP-DestinationCurrency'.toLowerCas
 const FSPIOP_SourceHeader = 'FSPIOP-Source'.toLowerCase();
 const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
 
+const db = require('./events/persistence/db/database');
+const Constants = require('./events/persistence/constants/Constants');
+
 (async function() {
     // Set up the config from the environment
     await setConfig(process.env);
     const conf = getConfig();
+
+    // knex create/update tables
+    if(Constants.DATABASE.RUN_MIGRATIONS){
+        await db.runKnexMigration();
+    }
 
     console.log(`Config loaded: ${util.inspect(conf, { depth: 10 })}`);
 

@@ -5,5 +5,6 @@ module.exports = {
         DATABASE_USER: process.env.DATABASE_USER || 'fxp',
         DATABASE_PASSWORD: process.env.DATABASE_PASSWORD || 'fxp',
         DATABASE_SCHEMA: process.env.DATABASE_SCHEMA || 'fxp',
+        RUN_MIGRATIONS: process.env.RUN_MIGRATIONS || false
     },
 };
