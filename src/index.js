@@ -46,40 +46,17 @@ const FSPIOP_SourceHeader = 'FSPIOP-Source'.toLowerCase();
 const FSPIOP_DestinationHeader = 'FSPIOP-Destination'.toLowerCase();
 
 const db = require('./events/persistence/db/database');
-
-// FIXME: externalize as variables
-let DB_RETRIES = 10;
-const DB_CONNECTION_RETRY_WAIT_MILLISECONDS = 5000;
-
-// design your application to attempt to re-establish a connection to the database after a failure
-// https://docs.docker.com/compose/startup-order/
-(async () => {
-    let dbRetries = 1;
-    // knex create/update tables
-    const runKnexMigration = async () => {
-        try {
-            await db.runKnexMigrations();
-            console.log(`success connected to DB... retry: ${dbRetries}`);
-        } catch (e) {
-            console.log(`attempting retry: ${dbRetries}`);
-            dbRetries++;
-            if (dbRetries === DB_RETRIES) {
-                console.error('could not get connection to DB after retries', e);
-                process.exit(1);
-            } else {
-                setTimeout(runKnexMigration, DB_CONNECTION_RETRY_WAIT_MILLISECONDS);
-            }
-        }
-    };
-    if(process.env.FXP){
-        runKnexMigration();
-    }
-})();
+const Constants = require('./events/persistence/constants/Constants');
 
 (async function() {
     // Set up the config from the environment
     await setConfig(process.env);
     const conf = getConfig();
+
+    // knex create/update tables
+    if(Constants.DATABASE.RUN_MIGRATIONS){
+        await db.runKnexMigration();
+    }
 
     console.log(`Config loaded: ${util.inspect(conf, { depth: 10 })}`);
 
