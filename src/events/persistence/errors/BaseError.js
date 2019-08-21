@@ -1,21 +1,21 @@
 'use strict';
 
 class BaseError extends Error {
-  constructor (category, message = '') {
-    super(message);
-    this.category = category;
-    this.name = this.constructor.name;
-    this.payload = {
-      id: this.name,
-      message: message
-    };
+    constructor (category, message = '') {
+        super(message);
+        this.category = category;
+        this.name = this.constructor.name;
+        this.payload = {
+            id: this.name,
+            message: message
+        };
 
-    this.headers = {};
+        this.headers = {};
 
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, this.constructor);
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, this.constructor);
+        }
     }
-  }
 }
 
 module.exports = BaseError;
