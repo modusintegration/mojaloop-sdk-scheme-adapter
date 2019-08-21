@@ -80,7 +80,7 @@ paths:
                 $ref: '#/components/schemas/transferResponse'
         500:
           $ref: '#/components/responses/500'
-          
+
 components:
   schemas:
   
@@ -433,6 +433,8 @@ components:
       - ERROR_OCCURRED
       - WAITING_FOR_QUOTE_ACCEPTANCE
       - COMPLETED
+
+
           
   responses:
     '200':

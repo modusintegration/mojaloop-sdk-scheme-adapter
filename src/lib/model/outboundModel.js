@@ -17,7 +17,7 @@ const MojaloopRequests = require('@modusbox/mojaloop-sdk-standard-components').M
 const Ilp = require('@modusbox/mojaloop-sdk-standard-components').Ilp;
 const shared = require('@internal/shared');
 
-const ASYNC_TIMEOUT_MILLS = 30000;
+const ASYNC_TIMEOUT_MILLS = 30000 * 1000; // FIXME debugging
 
 const transferStateEnum = {
     'WAITING_FOR_QUOTE_ACCEPTANCE': 'WAITING_FOR_QUOTE_ACCEPTANCE',

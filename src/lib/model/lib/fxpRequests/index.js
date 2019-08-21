@@ -11,12 +11,7 @@
 'use strict';
 
 
-const inboundTransfersModel = require('./inboundModel.js');
-const outboundTransfersModel = require('./outboundModel.js');
-const fxpInboundModel = require('./fxpInboundModel.js');
+const FxpBackendRequests = require('./fxpBackendRequests.js');
 
-module.exports = {
-    inboundTransfersModel: inboundTransfersModel,
-    outboundTransfersModel: outboundTransfersModel,
-    fxpInboundModel: fxpInboundModel
-};
+
+module.exports = FxpBackendRequests;

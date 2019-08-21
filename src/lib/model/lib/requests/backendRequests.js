@@ -18,7 +18,6 @@ const common = require('./common.js');
 const buildUrl = common.buildUrl;
 const throwOrJson = common.throwOrJson;
 
-
 /**
  * A class for making requests to DFSP backend API
  */
@@ -49,7 +48,7 @@ class BackendRequests {
 
 
     /**
-     * Executes a POST /quotes request for the specified quote request
+     * Executes a POST /quoterequests request for the specified quote request
      *
      * @returns {object} - JSON response body if one was received
      */
@@ -57,7 +56,7 @@ class BackendRequests {
         return this._post('quoterequests', quoteRequest);
     }
 
-
+    
     /**
      * Executes a POST /transfers request for the specified transfer prepare
      *

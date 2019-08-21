@@ -1,12 +1,16 @@
-FROM node:8.11.3-alpine
+FROM node:10.16-alpine
+
+# Need to have git since we're installing dependencies from github
+RUN apk add --no-cache git
 
 EXPOSE 3000
 
-COPY ./secrets /
-
-WORKDIR /src/
-
-CMD ["node", "/src/index.js"]
+COPY ./secrets /secrets
 
 COPY ./src/ /src/
-RUN npm install --production
+
+COPY package.json .
+
+RUN npm install
+
+CMD ["node", "/src/index.js"]

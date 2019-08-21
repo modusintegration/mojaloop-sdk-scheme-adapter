@@ -40,8 +40,11 @@ async function readFilesDelimitedList(delimiter, list) {
 let config = {
     inboundPort: 4000,
     outboundPort: 4001,
-    peerEndpoint: '172.17.0.2:3001',
-    backendEndpoint: '172.17.0.2:3001',
+    peerEndpoint: 'peerEndpoint:3001',
+    backendEndpoint: 'backendEndpoint:3001',
+    fxpModeEnabled: false,
+    forwardPutQuotesToBackend: false,
+    forwardPutTransfersToBackend: false,
     dfspId: 'mojaloop-sdk',
     ilpSecret: 'mojaloop-sdk',
     checkIlp: true,
@@ -71,15 +74,20 @@ let config = {
     enableTestFeatures: false
 };
 
-
+/**
+ * Creates a config from a set of parameters.
+ * 
+ * @param {process.env} cfg Usually sent as process.env
+ */
 const setConfig = async cfg => {
     config.inboundPort = cfg.INBOUND_LISTEN_PORT;
     config.outboundPort = cfg.OUTBOUND_LISTEN_PORT;
-    config.tls.mutualTLS.enabled = cfg.MUTUAL_TLS_ENABLED.toLowerCase() === 'false' ? false : true;
+    config.tls.mutualTLS.enabled = cfg.MUTUAL_TLS_ENABLED.toLowerCase() === 'false' ? false : true; // FIXME TypeError: Cannot read property 'toLowerCase' of undefined if cfg.MUTUAL_TLS_ENABLED is undefined
 
     config.peerEndpoint = cfg.PEER_ENDPOINT;
     config.backendEndpoint = cfg.BACKEND_ENDPOINT;
-
+    config.fxpModeEnabled = cfg.FXP_MODE_ENABLED && cfg.FXP_MODE_ENABLED.toLowerCase() === 'true' ? true : false;
+    
     config.dfspId = cfg.DFSP_ID;
     config.ilpSecret = cfg.ILP_SECRET;
     config.checkIlp = cfg.CHECK_ILP.toLowerCase() === 'false' ? false : true;
@@ -120,7 +128,19 @@ const setConfig = async cfg => {
     config.cacheConfig.host = cfg.CACHE_HOST;
     config.cacheConfig.port = cfg.CACHE_PORT;
 
-    config.enableTestFeatures = cfg.ENABLE_TEST_FEATURES.toLowerCase() === 'true' ? true : false;
+    config.getDfspEndpoint = dfsp => {
+        if (config.peerRoutingConfig && config.peerRoutingConfig.routes) {
+            return config.peerRoutingConfig.routes.find( x => x.dfsp === dfsp);
+        }
+        return null;
+    };
+    if (cfg.PEER_ROUTING_CONFIG) {
+        config.peerRoutingConfig = JSON.parse(await readFile(cfg.PEER_ROUTING_CONFIG));
+    }
+
+    config.forwardPutQuotesToBackend = cfg.FORWARD_PUT_QUOTES_TO_BACKEND && cfg.FORWARD_PUT_QUOTES_TO_BACKEND.toLowerCase() === 'true' ? true : false;
+    config.forwardPutTransfersToBackend = cfg.FORWARD_PUT_TRANSFERS_TO_BACKEND && cfg.FORWARD_PUT_TRANSFERS_TO_BACKEND.toLowerCase() === 'true' ? true : false;
+    config.enableTestFeatures = cfg.ENABLE_TEST_FEATURES && cfg.ENABLE_TEST_FEATURES.toLowerCase() === 'true' ? true : false;
 
     config.wso2BearerToken = cfg.WS02_BEARER_TOKEN;
 };
