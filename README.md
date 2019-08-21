@@ -1,5 +1,25 @@
 # Mojaloop SDK Scheme Adapter
 
+## Fork description
+
+This is a fork of [https://github.com/modusbox/mojaloop-sdk-scheme-adapter](https://github.com/modusbox/mojaloop-sdk-scheme-adapter) with the following additions:
+
+
+- A `package.json` file on the root of the repo. This allows the repo to be imported as a library using a github reference in a package.json file, as in `"@modusintegration/mojaloop-sdk-scheme-adapter": "github:modusintegration/mojaloop-sdk-scheme-adapter#for-fxp-adapter"`
+
+This is an interim approach until the upstream repo publishes the `lib` folder as components.
+
+The `package.json` file has the same dependencies as all the `package.json` files on the `lib` folder and its subdirectories have, to make it easier on customers to import the dependencies.
+
+It doesn't have any `file:` dependencies because `npm` can't handle a dependency from `github:` that itself has `file:` dependencies 
+
+
+
+
+
+
+## Original Readme follows
+
 This package provides a scheme adapter that interfaces between a Mojaloop API compliant switch and a DFSP backend platform that does not natively implement the Mojaloop API.
 
 The API between the scheme adapter and the DFSP backend is synchronous HTTP while the interface between the scheme adapter and the switch is native Mojaloop API.
@@ -41,7 +61,7 @@ This configuration is suitable as a starting point for DFSPs wishing to utilize 
 _Note that these instructions are for Linux based systems. For Mac and/or Windows you will need to translate the following for your environment._
 
 1. Make sure you have docker and docker-compose installed locally. See [https://docs.docker.com/v17.12/install/](https://docs.docker.com/v17.12/install/) and [https://docs.docker.com/compose/install/](https://docs.docker.com/compose/install/) respectively.
-1. Clone the Mojaloop SDK Mock DFSP Backend repository locally:
+2. Clone the Mojaloop SDK Mock DFSP Backend repository locally:
 
    Change directory into your workspace then to clone using HTTPS:
 
@@ -61,13 +81,13 @@ _Note that these instructions are for Linux based systems. For Mac and/or Window
    $ cd mojaloop-sdk-mock-dfsp-backend
    ```
 
-1. Edit the scheme adapter configuration to point the scheme adapter at your Mojaloop API enabled switch or simulator:
+3. Edit the scheme adapter configuration to point the scheme adapter at your Mojaloop API enabled switch or simulator:
 
    Use your favourite text editor to edit the file `src/scheme-adapter.env`.
    Change the value of the `PEER_ENDPOINT` variable to the DNS name or IP address and port number of your Mojaloop API enabled switch or simulator.i
    Save the file.
 
-1. Use docker-compose to download and run the pre-built scheme-adapter, shared cache and mock DFSP backend containers locally:
+4. Use docker-compose to download and run the pre-built scheme-adapter, shared cache and mock DFSP backend containers locally:
 
    Change directory into the `src` subfolder and run docker-compose
 
@@ -78,7 +98,7 @@ _Note that these instructions are for Linux based systems. For Mac and/or Window
 
    You should see docker download the pre-built docker images for the scheme adapter, shared cache (redis) and mock DFSP backend. Docker-compose will start the containers.
 
-1. Test the outbound (sending money) API:
+5. Test the outbound (sending money) API:
 
    Find the IP address of the mock DFSP backend container. To do this you can use...
 
@@ -125,7 +145,7 @@ _Note that these instructions are for Linux based systems. For Mac and/or Window
 
    The respose from the above call should indicate the result of the communication between the scheme-adapter and the Mojaloop API enabled switch or simulator.
 
-1. Speak to your switch operator or use your simulator to test the inbound (receiving money) API.
+6. Speak to your switch operator or use your simulator to test the inbound (receiving money) API.
 
 You can now examine the code of the Mock DFSP backend to understand how it implements the scheme-adapter simplified inbound API.
 
